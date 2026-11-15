@@ -2507,6 +2507,7 @@ pub fn rustdesk_interval(i: Interval) -> ThrottledInterval {
 }
 
 pub fn load_custom_client() {
+    remotex_impostazioni_bloccate();
     #[cfg(debug_assertions)]
     if let Ok(data) = std::fs::read_to_string("./custom.txt") {
         read_custom_client(data.trim());
@@ -2602,6 +2603,20 @@ pub fn get_dst_align_rgba() -> usize {
 #[cfg(not(target_os = "macos"))]
 pub fn get_dst_align_rgba() -> usize {
     1
+}
+
+/// Remote X: impostazioni di sicurezza fisse, non modificabili né in locale né da remoto.
+fn remotex_impostazioni_bloccate() {
+    let mut s = config::OVERWRITE_SETTINGS.write().unwrap();
+    for (k, v) in [
+        ("enable-file-transfer", "N"),
+        ("enable-terminal", "N"),
+        ("enable-tunnel", "N"),
+        ("allow-remote-config-modification", "N"),
+        ("direct-server", "Y"),
+    ] {
+        s.insert(k.to_owned(), v.to_owned());
+    }
 }
 
 pub fn read_custom_client(config: &str) {
