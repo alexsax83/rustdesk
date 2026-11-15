@@ -2607,6 +2607,7 @@ pub fn get_dst_align_rgba() -> usize {
 
 /// Remote X: impostazioni di sicurezza fisse, non modificabili né in locale né da remoto.
 fn remotex_impostazioni_bloccate() {
+    *config::APP_NAME.write().unwrap() = "RemoteX".to_owned();
     let mut s = config::OVERWRITE_SETTINGS.write().unwrap();
     for (k, v) in [
         ("enable-file-transfer", "N"),
@@ -2620,6 +2621,7 @@ fn remotex_impostazioni_bloccate() {
 }
 
 pub fn read_custom_client(config: &str) {
+    remotex_impostazioni_bloccate();
     let Ok(data) = decode64(config) else {
         log::error!("Failed to decode custom client config");
         return;
