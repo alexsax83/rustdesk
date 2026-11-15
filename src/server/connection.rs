@@ -1909,6 +1909,25 @@ impl Connection {
         if !self.check_trusted_device().await {
             return false;
         }
+        // Remote X: collegamento 1 a 1. Se un altro controllore (sessione diversa)
+        // è già autorizzato su questo dispositivo, il nuovo viene rifiutato.
+        {
+            let mia = self.session_key();
+            let occupato = AUTHED_CONNS
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|c| c.session_key != mia);
+            if occupato {
+                log::warn!("Remote X: rifiutato secondo controllore da {}", self.ip);
+                self.send_login_error(
+                    "Dispositivo già in uso: è consentito un solo collegamento alla volta",
+                )
+                .await;
+                sleep(1.).await;
+                return false;
+            }
+        }
         self.lr.trusted_device_v2_token.clear();
         self.authorized = true;
         self.unauthorized_id = None;
