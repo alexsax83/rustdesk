@@ -275,6 +275,8 @@ final class Ponte: ObservableObject {
         } else {
             Portachiavi.scrivi(k, "sessione", gruppo: Portachiavi.gruppoCondiviso)
             ch.invia(.sessione, k)
+            // Apre subito la conferma di iOS «Avvia trasmissione».
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { AvvioTrasmissione.avvia() }
         }
     }
 
@@ -329,4 +331,21 @@ final class SelettorePieno: RPSystemBroadcastPickerView {
     }
 
     @objc private func toccato() { alTocco?() }
+
+    /// Preme il pulsante di sistema come se lo toccasse la persona.
+    func premi() {
+        layoutIfNeeded()
+        for case let b as UIButton in subviews { b.sendActions(for: .touchUpInside) }
+    }
+}
+
+/// Un solo pulsante di sistema, sempre presente nella finestra (quasi invisibile):
+/// dopo «Accetta» l'app lo preme e iOS mostra «Avvia trasmissione».
+@MainActor
+enum AvvioTrasmissione {
+    static let selettore = SelettorePieno(frame: CGRect(x: 0, y: 0, width: 4, height: 4))
+    static func avvia() {
+        guard !UIScreen.main.isCaptured else { return }
+        selettore.premi()
+    }
 }

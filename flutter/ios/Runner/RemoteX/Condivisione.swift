@@ -21,6 +21,11 @@ final class RemoteXCondivisione {
     func avvia(in window: UIWindow?) {
         guard let window, finestra == nil else { return }
         finestra = window
+        // Pulsante di sistema unico, quasi invisibile: l'app lo preme dopo «Accetta».
+        let s = AvvioTrasmissione.selettore
+        s.frame = CGRect(x: 0, y: 0, width: 4, height: 4)
+        s.alpha = 0.02
+        window.addSubview(s)
         ponte.avvia()
         osserva = ponte.objectWillChange.sink { [weak self] _ in
             DispatchQueue.main.async { self?.aggiorna() }
@@ -91,14 +96,13 @@ struct RichiestaSchermo: View {
                         .font(.footnote).foregroundColor(.secondary)
                 }
                 VStack(spacing: 8) {
-                    ZStack {
+                    Button { ponte.consenti() } label: {
                         Text("Accetta")
                             .font(.title3.bold()).foregroundColor(.white)
                             .frame(maxWidth: .infinity, minHeight: 56)
                             .background(RoundedRectangle(cornerRadius: 14).fill(Color.green))
-                        PulsanteSistema { ponte.consenti() }.opacity(0.02)
                     }
-                    .frame(height: 56)
+                    .buttonStyle(.plain)
                     Text("Subito dopo iPhone chiede ancora una conferma: tocca «Avvia trasmissione».")
                         .font(.footnote).foregroundColor(.secondary).multilineTextAlignment(.center)
                 }
@@ -124,12 +128,11 @@ struct BarraCondivisione: View {
                 .font(.callout.weight(.medium)).lineLimit(1).minimumScaleFactor(0.8)
             Spacer(minLength: 4)
             if !ponte.trasmissioneAttiva {
-                ZStack {
+                Button { AvvioTrasmissione.avvia() } label: {
                     Text("Riprova").font(.callout.bold()).padding(.horizontal, 10).padding(.vertical, 6)
                         .background(Capsule().fill(Color.orange.opacity(0.25)))
-                    PulsanteSistema {}.opacity(0.02)
                 }
-                .fixedSize()
+                .buttonStyle(.plain)
             }
             Button("Termina") { ponte.terminaAiutante() }
                 .font(.callout.bold()).foregroundColor(.white)
@@ -143,13 +146,3 @@ struct BarraCondivisione: View {
     }
 }
 
-/// Il pulsante di sistema che apre la conferma «Avvia trasmissione».
-struct PulsanteSistema: UIViewRepresentable {
-    let alTocco: () -> Void
-    func makeUIView(context: Context) -> SelettorePieno {
-        let v = SelettorePieno(frame: .zero)
-        v.alTocco = alTocco
-        return v
-    }
-    func updateUIView(_ v: SelettorePieno, context: Context) { v.alTocco = alTocco }
-}
