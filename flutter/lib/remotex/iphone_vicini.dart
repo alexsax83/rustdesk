@@ -360,7 +360,7 @@ class _Sessione extends ChangeNotifier {
         c.invia(_Tipo.videoQui, [_portaVideo >> 8, _portaVideo & 0xff, 2]);
         c.invia(_Tipo.richiesta, utf8.encode(nome));
         numero = c.numeroControllo;
-        _aggiorna(StatoSessione.attesaAccetta, 'Sull\'altro dispositivo deve toccare «Inizia condivisione»');
+        _aggiorna(StatoSessione.attesaAccetta, 'Sull\'altro dispositivo deve toccare «Accetta»');
       };
       c.onMessaggio = (tipo, dati) {
         if (tipo == _Tipo.consenso) {

@@ -103,7 +103,7 @@ struct RichiestaSchermo: View {
                             .background(RoundedRectangle(cornerRadius: 14).fill(Color.green))
                     }
                     .buttonStyle(.plain)
-                    Text("Per accettare tocca «Inizia condivisione» nella finestra di iOS. Se l'hai chiusa, tocca Accetta.")
+                    Text("Dopo Accetta, iPhone chiede di confermare: tocca «Inizia condivisione».")
                         .font(.footnote).foregroundColor(.secondary).multilineTextAlignment(.center)
                 }
                 Button { ponte.rifiuta() } label: {

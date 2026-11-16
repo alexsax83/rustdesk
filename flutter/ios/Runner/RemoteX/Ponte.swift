@@ -287,8 +287,6 @@ final class Ponte: ObservableObject {
         }
         seguiStato()
         richiesta = RichiestaInArrivo(nome: nome.isEmpty ? "Un dispositivo" : nome, numero: ch.numeroControllo ?? "----")
-        // Un solo tocco: compare subito la finestra di iOS; «Inizia condivisione» vale come Accetta.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { AvvioTrasmissione.avvia() }
     }
 
     private func annullaRichiesta() {
@@ -301,8 +299,6 @@ final class Ponte: ObservableObject {
     /// Accetta: chi aiuta riceve la chiave della sessione e lo schermo parte.
     func consenti() {
         guard let ch = inAttesaDiConsenso, let k = chiaveInAttesa else { richiesta = nil; return }
-        // Serve per far sapere dove indica chi aiuta, anche quando si usa un'altra app.
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
         inAttesaDiConsenso = nil
         chiaveInAttesa = nil
         richiesta = nil
