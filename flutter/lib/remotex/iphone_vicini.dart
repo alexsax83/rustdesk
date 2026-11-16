@@ -17,6 +17,7 @@ import 'dart:typed_data';
 import 'package:cryptography/cryptography.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/material.dart';
+import 'package:window_manager/window_manager.dart';
 
 const int _portaRichiesta = 47814;
 const int _portaVideo = 47818; // qui ascolta chi guarda: si collega l'iPhone
@@ -669,9 +670,24 @@ class _PaginaSchermoIPhoneState extends State<PaginaSchermoIPhone> {
                   style: TextStyle(fontWeight: FontWeight.w600, color: guardando ? Colors.white : null),
                 ),
               ),
+              if (Platform.isWindows || Platform.isMacOS || Platform.isLinux)
+                IconButton(
+                  tooltip: 'Tutto schermo',
+                  icon: Icon(Icons.fullscreen, color: guardando ? Colors.white : null),
+                  onPressed: () async {
+                    try {
+                      await windowManager.setFullScreen(!await windowManager.isFullScreen());
+                    } catch (_) {}
+                  },
+                ),
               FilledButton(
                 style: FilledButton.styleFrom(backgroundColor: Colors.red),
-                onPressed: () => Navigator.of(context).pop(),
+                onPressed: () async {
+                  try {
+                    if (await windowManager.isFullScreen()) await windowManager.setFullScreen(false);
+                  } catch (_) {}
+                  if (mounted) Navigator.of(context).pop();
+                },
                 child: const Text('Termina'),
               ),
             ]),

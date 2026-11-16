@@ -23,8 +23,8 @@ final class Ponte: ObservableObject {
     @Published var trasmissioneAttiva = UIScreen.main.isCaptured
     /// Messaggio breve dopo «Termina», così si vede che è finita davvero.
     @Published var avviso: String?
-    /// Finestrella con la freccia di chi aiuta: spenta di base, si accende nelle Impostazioni.
-    @Published var frecciaVisibile = UserDefaults.standard.bool(forKey: "frecciaVisibile") {
+    /// Finestrella con la freccia di chi aiuta (si può spegnere nelle Impostazioni).
+    @Published var frecciaVisibile = (UserDefaults.standard.object(forKey: "frecciaVisibile") as? Bool) ?? true {
         didSet { UserDefaults.standard.set(frecciaVisibile, forKey: "frecciaVisibile") }
     }
 
@@ -453,12 +453,17 @@ final class PuntatoreRemoto: NSObject, AVPictureInPictureSampleBufferPlaybackDel
             p.requiresLinearPlayback = true
             pip = p
         }
-        prova(5)
+        if UIApplication.shared.applicationState == .active { prova(5) }
+        attivazione = NotificationCenter.default.addObserver(forName: UIApplication.didBecomeActiveNotification,
+                                                             object: nil, queue: .main) { [weak self] _ in
+            Task { @MainActor in self?.prova(3) }
+        }
     }
+    private var attivazione: NSObjectProtocol?
 
     /// Il Picture in Picture parte solo quando è pronto: si riprova qualche volta.
     private func prova(_ volte: Int) {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) { [weak self] in
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in
             guard let self, self.attivo, let p = self.pip, !p.isPictureInPictureActive else { return }
             if p.isPictureInPicturePossible { p.startPictureInPicture() } else if volte > 0 { self.prova(volte - 1) }
         }
@@ -468,6 +473,7 @@ final class PuntatoreRemoto: NSObject, AVPictureInPictureSampleBufferPlaybackDel
         guard attivo else { return }
         attivo = false
         pip?.stopPictureInPicture()
+        if let a = attivazione { NotificationCenter.default.removeObserver(a); attivazione = nil }
         timer?.invalidate(); timer = nil
         ascolto?.cancel(); ascolto = nil
         canale?.chiudi(); canale = nil
