@@ -151,7 +151,9 @@ final class Ponte: ObservableObject {
         }
         ch.onMessaggio = { [weak self] m in
             Task { @MainActor in
-                guard let self, m.tipo == .richiesta else { return }
+                guard let self else { return }
+                if m.tipo == .videoQui { self.ricordaDestinazione(ch, m.dati) }
+                guard m.tipo == .richiesta else { return }
                 self.mostraRichiesta(ch, nome: String(decoding: m.dati.prefix(80), as: UTF8.self), conCodice: conCodice)
             }
         }
@@ -206,7 +208,9 @@ final class Ponte: ObservableObject {
         inCorso = ch
         ch.onMessaggio = { [weak self] m in
             Task { @MainActor in
-                guard let self, m.tipo == .richiesta else { return }
+                guard let self else { return }
+                if m.tipo == .videoQui { self.ricordaDestinazione(ch, m.dati) }
+                guard m.tipo == .richiesta else { return }
                 self.mostraRichiesta(ch, nome: String(decoding: m.dati.prefix(80), as: UTF8.self), conCodice: false)
             }
         }
@@ -230,6 +234,29 @@ final class Ponte: ObservableObject {
     }
 
     private var richiestaConCodice = false
+    private var destinazioni: [ObjectIdentifier: String] = [:]
+
+    /// Chi guarda dice su quale porta aspetta lo schermo: l'estensione si collegherà lì
+    /// (iOS non lascia sempre ricevere collegamenti a un'estensione, uscire sì).
+    private func ricordaDestinazione(_ ch: Canale, _ d: Data) {
+        guard d.count == 3, case let .hostPort(host, _)? = ch.connessione.currentPath?.remoteEndpoint else { return }
+        let porta = Int(d[d.startIndex]) << 8 | Int(d[d.startIndex + 1])
+        destinazioni[ObjectIdentifier(ch)] = "\(host)|\(porta)|\(d[d.startIndex + 2])"
+    }
+
+    private var ultimoStato = ""
+    private var timerStato: Timer?
+    /// Inoltra a chi guarda a che punto è la trasmissione (utile se lo schermo non arriva).
+    private func seguiStato() {
+        timerStato?.invalidate()
+        timerStato = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                guard let self, let ch = self.aiutante ?? self.inAttesaDiConsenso else { return }
+                let t = Portachiavi.leggi("statoTrasmissione", gruppo: Portachiavi.gruppoCondiviso).map { String(decoding: $0, as: UTF8.self) } ?? ""
+                if !t.isEmpty && t != self.ultimoStato { self.ultimoStato = t; ch.invia(.diagnostica, Data(t.utf8)) }
+            }
+        }
+    }
     private var chiaveInAttesa: Data?
 
     /// Compare il messaggio «… vuole vedere il tuo schermo» con Accetta e Rifiuta.
@@ -242,6 +269,12 @@ final class Ponte: ObservableObject {
         let k = RemoteXRete.chiaveCasuale().withUnsafeBytes { Data($0) }
         chiaveInAttesa = k
         if !UIScreen.main.isCaptured { Portachiavi.scrivi(k, "sessione", gruppo: Portachiavi.gruppoCondiviso) }
+        Portachiavi.cancella("statoTrasmissione", gruppo: Portachiavi.gruppoCondiviso)
+        ultimoStato = ""
+        if let dest = destinazioni[ObjectIdentifier(ch)] {
+            Portachiavi.scrivi(Data(dest.utf8), "destinazione", gruppo: Portachiavi.gruppoCondiviso)
+        }
+        seguiStato()
         richiesta = RichiestaInArrivo(nome: nome.isEmpty ? "Un dispositivo" : nome, numero: ch.numeroControllo ?? "----")
         // Un solo tocco: compare subito la finestra di iOS; «Inizia condivisione» vale come Accetta.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { AvvioTrasmissione.avvia() }

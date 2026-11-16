@@ -19,7 +19,7 @@ import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/material.dart';
 
 const int _portaRichiesta = 47814;
-const int _portaJpeg = 47816;
+const int _portaVideo = 47818; // qui ascolta chi guarda: si collega l'iPhone
 const int _portaSonda = 47817;
 
 class _Tipo {
@@ -30,6 +30,8 @@ class _Tipo {
   static const consenso = 8;
   static const sessione = 9;
   static const jpeg = 10;
+  static const diagnostica = 11;
+  static const videoQui = 12;
 }
 
 // ---------------------------------------------------------------------------
@@ -64,6 +66,10 @@ class _Canale {
 
   static Future<_Canale> collega(String host, int porta, List<int> psk) async {
     final s = await Socket.connect(host, porta, timeout: const Duration(seconds: 4));
+    return daSocket(s, psk);
+  }
+
+  static Future<_Canale> daSocket(Socket s, List<int> psk) async {
     try {
       s.setOption(SocketOption.tcpNoDelay, true);
     } catch (_) {}
@@ -299,6 +305,8 @@ class _Sessione extends ChangeNotifier {
   Size? dimensioni;
   _Canale? _richiesta;
   _Canale? _video;
+  ServerSocket? _ascolto;
+  Socket? _inAttesa;
   List<int>? _chiaveSessione;
   bool _terminata = false;
 
@@ -327,10 +335,28 @@ class _Sessione extends ChangeNotifier {
   Future<void> avvia() async {
     final psk = (await Sha256().hash(utf8.encode('RemoteX-richiesta-v1'))).bytes;
     final nome = await _mioNome();
+    // Lo schermo arriva qui: è l'iPhone che si collega a questo dispositivo.
+    try {
+      _ascolto = await ServerSocket.bind(InternetAddress.anyIPv4, _portaVideo, shared: true);
+      _ascolto!.listen((s) {
+        if (_video != null || _terminata) {
+          s.destroy();
+        } else if (_chiaveSessione != null) {
+          _attacca(s);
+        } else {
+          _inAttesa?.destroy();
+          _inAttesa = s;
+        }
+      });
+    } catch (_) {
+      _aggiorna(StatoSessione.finita, 'Non riesco a ricevere lo schermo: un\'altra app usa la porta 47818.');
+      return;
+    }
     try {
       final c = await _Canale.collega(dispositivo.ip, _portaRichiesta, psk);
       _richiesta = c;
       c.onPronto = () {
+        c.invia(_Tipo.videoQui, [_portaVideo >> 8, _portaVideo & 0xff, 2]);
         c.invia(_Tipo.richiesta, utf8.encode(nome));
         numero = c.numeroControllo;
         _aggiorna(StatoSessione.attesaAccetta, 'Sull\'altro dispositivo deve toccare «Inizia condivisione»');
@@ -340,8 +366,12 @@ class _Sessione extends ChangeNotifier {
           _aggiorna(StatoSessione.attesaTrasmissione, 'Accettato. Ora sull\'altro dispositivo deve toccare «Inizia condivisione».');
         } else if (tipo == _Tipo.sessione && dati.length == 32 && _chiaveSessione == null) {
           _chiaveSessione = dati;
-          _aggiorna(StatoSessione.attesaTrasmissione, 'Accettato. Ora sull\'altro dispositivo deve toccare «Inizia condivisione».');
-          _collegaVideo(60);
+          _aggiorna(StatoSessione.attesaTrasmissione, 'Accettato. Aspetto che l\'iPhone si colleghi…');
+          final s = _inAttesa;
+          _inAttesa = null;
+          if (s != null) _attacca(s);
+        } else if (tipo == _Tipo.diagnostica && stato != StatoSessione.schermo) {
+          _aggiorna(stato, utf8.decode(dati, allowMalformed: true));
         }
       };
       c.onChiuso = () {
@@ -355,38 +385,32 @@ class _Sessione extends ChangeNotifier {
     }
   }
 
-  Future<void> _collegaVideo(int tentativi) async {
-    if (_terminata || _chiaveSessione == null) return;
-    try {
-      final v = await _Canale.collega(dispositivo.ip, _portaJpeg, _chiaveSessione!);
-      _video = v;
-      v.onPronto = () => v.invia(_Tipo.richiestaChiave, const []);
-      v.onMessaggio = (tipo, dati) {
-        if (tipo != _Tipo.jpeg) return;
-        immagine = dati;
-        dimensioni = _misuraJpeg(dati) ?? dimensioni;
-        if (stato != StatoSessione.schermo) {
-          _aggiorna(StatoSessione.schermo, '');
-        } else {
-          notifyListeners();
-        }
-      };
-      v.onChiuso = () {
-        if (_terminata) return;
-        if (stato == StatoSessione.schermo) {
-          _aggiorna(StatoSessione.finita, 'L\'altra persona ha terminato la condivisione.');
-        } else if (tentativi > 0) {
-          Future.delayed(const Duration(milliseconds: 1500), () => _collegaVideo(tentativi - 1));
-        }
-      };
-    } catch (_) {
-      if (tentativi > 0) {
-        Future.delayed(const Duration(milliseconds: 1500), () => _collegaVideo(tentativi - 1));
-      } else {
-        _aggiorna(StatoSessione.finita,
-            'Sull\'altro dispositivo la condivisione non è partita. Riprova: dopo «Accetta» bisogna toccare anche «Inizia condivisione».');
-      }
+  Future<void> _attacca(Socket socket) async {
+    if (_terminata || _chiaveSessione == null || _video != null) {
+      socket.destroy();
+      return;
     }
+    final v = await _Canale.daSocket(socket, _chiaveSessione!);
+    _video = v;
+    v.onPronto = () => v.invia(_Tipo.richiestaChiave, const []);
+    v.onMessaggio = (tipo, dati) {
+      if (tipo != _Tipo.jpeg) return;
+      immagine = dati;
+      dimensioni = _misuraJpeg(dati) ?? dimensioni;
+      if (stato != StatoSessione.schermo) {
+        _aggiorna(StatoSessione.schermo, '');
+      } else {
+        notifyListeners();
+      }
+    };
+    v.onChiuso = () {
+      if (_terminata) return;
+      if (stato == StatoSessione.schermo) {
+        _aggiorna(StatoSessione.finita, 'L\'altra persona ha terminato la condivisione.');
+      } else {
+        _video = null;
+      }
+    };
   }
 
   void indica(double x, double y) {
@@ -398,6 +422,8 @@ class _Sessione extends ChangeNotifier {
 
   void termina() {
     _terminata = true;
+    _inAttesa?.destroy();
+    _ascolto?.close();
     _video?.chiudi();
     _richiesta?.chiudi();
   }
