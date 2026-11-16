@@ -15,6 +15,9 @@
 		97C146FE1CF9000F007C117D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FD1CF9000F007C117D /* Assets.xcassets */; };
 		97C147011CF9000F007C117D /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FF1CF9000F007C117D /* LaunchScreen.storyboard */; };
 		C5678348E08E565F424B13A5 /* Pods_Runner.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 25E069BDBEF2890938537ABB /* Pods_Runner.framework */; };
+		E51999896C6E4C5691EBF3D8 /* Protocollo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F23B4CED4D94B4DB87275BB /* Protocollo.swift */; };
+		66B5CDF84322498895C014B1 /* Ponte.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE2A2F5808554B4DA379BFD0 /* Ponte.swift */; };
+		D6CC68B9EB77492BB3A994E1 /* Condivisione.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10FD7AB24DEB4B74BA19738A /* Condivisione.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -51,6 +54,9 @@
 		97C147001CF9000F007C117D /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		97C147021CF9000F007C117D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		C66E40D850585BD073A0EF7D /* Pods-Runner.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Runner.release.xcconfig"; path = "Target Support Files/Pods-Runner/Pods-Runner.release.xcconfig"; sourceTree = "<group>"; };
+		6F23B4CED4D94B4DB87275BB /* Protocollo.swift */ = {isa = PBXFileReference; name = "Protocollo.swift"; path = "Protocollo.swift"; sourceTree = "<group>"; fileEncoding = 4; lastKnownFileType = sourcecode.swift; };
+		FE2A2F5808554B4DA379BFD0 /* Ponte.swift */ = {isa = PBXFileReference; name = "Ponte.swift"; path = "Ponte.swift"; sourceTree = "<group>"; fileEncoding = 4; lastKnownFileType = sourcecode.swift; };
+		10FD7AB24DEB4B74BA19738A /* Condivisione.swift */ = {isa = PBXFileReference; name = "Condivisione.swift"; path = "Condivisione.swift"; sourceTree = "<group>"; fileEncoding = 4; lastKnownFileType = sourcecode.swift; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -108,6 +114,7 @@
 				74858FAE1ED2DC5600515810 /* AppDelegate.swift */,
 				5CE7AD002EB4000000A1B2C3 /* SceneDelegate.swift */,
 				74858FAD1ED2DC5600515810 /* Runner-Bridging-Header.h */,
+				5185C808A5054A7791AB9981 /* RemoteX */,
 			);
 			path = Runner;
 			sourceTree = "<group>";
@@ -130,6 +137,17 @@
 			);
 			path = Pods;
 			sourceTree = "<group>";
+		};
+		5185C808A5054A7791AB9981 /* RemoteX */ = {
+			isa = "PBXGroup";
+			children = (
+				6F23B4CED4D94B4DB87275BB /* Protocollo.swift */,
+				FE2A2F5808554B4DA379BFD0 /* Ponte.swift */,
+				10FD7AB24DEB4B74BA19738A /* Condivisione.swift */,
+			);
+			name = RemoteX;
+			sourceTree = "<group>";
+			path = RemoteX;
 		};
 /* End PBXGroup section */
 
@@ -284,6 +302,9 @@
 				74858FAF1ED2DC5600515810 /* AppDelegate.swift in Sources */,
 				5CE7AD012EB4000000A1B2C3 /* SceneDelegate.swift in Sources */,
 				1498D2341E8E89220040F4C2 /* GeneratedPluginRegistrant.m in Sources */,
+				E51999896C6E4C5691EBF3D8 /* Protocollo.swift in Sources */,
+				66B5CDF84322498895C014B1 /* Ponte.swift in Sources */,
+				D6CC68B9EB77492BB3A994E1 /* Condivisione.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -438,7 +459,7 @@
 					"-framework",
 					"\"wakelock_plus\"",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.carriez.flutterHbb;
+				PRODUCT_BUNDLE_IDENTIFIER = it.alessandroinglese.remotex;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRIP_STYLE = "non-global";
 				SWIFT_OBJC_BRIDGING_HEADER = "Runner/Runner-Bridging-Header.h";
@@ -634,7 +655,7 @@
 					"-framework",
 					"\"wakelock_plus\"",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.carriez.flutterHbb;
+				PRODUCT_BUNDLE_IDENTIFIER = it.alessandroinglese.remotex;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRIP_STYLE = "non-global";
 				SWIFT_OBJC_BRIDGING_HEADER = "Runner/Runner-Bridging-Header.h";
@@ -722,7 +743,7 @@
 					"-framework",
 					"\"wakelock_plus\"",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.carriez.flutterHbb;
+				PRODUCT_BUNDLE_IDENTIFIER = it.alessandroinglese.remotex;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRIP_STYLE = "non-global";
 				SWIFT_OBJC_BRIDGING_HEADER = "Runner/Runner-Bridging-Header.h";

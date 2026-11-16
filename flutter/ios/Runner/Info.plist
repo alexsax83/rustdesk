@@ -43,10 +43,20 @@
 	<false/>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_remotex._tcp</string>
+		<string>_remotexp._tcp</string>
+		<string>_remotexr._tcp</string>
+	</array>
 	<key>NSCameraUsageDescription</key>
-	<string>This app needs camera access to scan QR codes</string>
+	<string>Remote X usa la fotocamera solo per leggere un codice QR.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Remote X usa la rete Wi‑Fi per trovare i tuoi computer e per mostrare lo schermo a chi ti aiuta.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>This app needs photo library access to get QR codes from image</string>
+	<string>Remote X usa le foto solo per leggere un codice QR da un'immagine.</string>
+	<key>RemoteXGruppoPortachiavi</key>
+	<string>$(AppIdentifierPrefix)it.alessandroinglese.remotex.condiviso</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

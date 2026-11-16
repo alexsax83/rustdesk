@@ -7,6 +7,10 @@ on:
   workflow_dispatch:
   push:
     branches: [remotex]
+    paths-ignore:
+      - "flutter/ios/**"
+      - "src/lan.rs"
+      - ".github/workflows/remotex-ios.yml"
 
 jobs:
   run-flutter-nightly-build:

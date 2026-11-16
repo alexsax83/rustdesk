@@ -177,7 +177,9 @@ fn create_broadcast_sockets() -> Vec<UdpSocket> {
     for v4_addr in ipv4s {
         // removing v4_addr.is_private() check, https://github.com/rustdesk/rustdesk/issues/4663
         if let Ok(s) = UdpSocket::bind(SocketAddr::from((v4_addr, 0))) {
-            if s.set_broadcast(true).is_ok() {
+            // Remote X: on iOS broadcast needs a paid entitlement; the socket is still
+            // used for the unicast sweep of the local subnet below.
+            if s.set_broadcast(true).is_ok() || cfg!(target_os = "ios") {
                 sockets.push(s);
             }
         }
@@ -213,6 +215,23 @@ fn send_query() -> ResultType<Vec<UdpSocket>> {
     let maddr = SocketAddr::from(([255, 255, 255, 255], get_broadcast_port()));
     for socket in &sockets {
         allow_err!(socket.send_to(&out, maddr));
+    }
+    // Remote X: iOS drops broadcast packets without the multicast entitlement, so we
+    // also ask every address of the local /24 network directly (unicast is allowed
+    // with the Local Network permission). Peers answer exactly as for the broadcast.
+    #[cfg(target_os = "ios")]
+    if let Some(IpAddr::V4(me)) = get_ipaddr_by_peer("1.1.1.1:80") {
+        if me.is_private() {
+            let o = me.octets();
+            let port = get_broadcast_port();
+            if let Some(socket) = sockets.first() {
+                for h in 1..=254u8 {
+                    if h != o[3] {
+                        let _ = socket.send_to(&out, SocketAddr::from(([o[0], o[1], o[2], h], port)));
+                    }
+                }
+            }
+        }
     }
     log::info!("discover ping sent");
     Ok(sockets)

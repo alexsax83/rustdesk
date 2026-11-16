@@ -29,6 +29,8 @@ import AVFoundation
       launchOptions[.url] = launchURL
     }
     _ = super.application(UIApplication.shared, didFinishLaunchingWithOptions: launchOptions)
+    // Remote X: chi aiuta sullo stesso Wi‑Fi può chiedere di vedere lo schermo (Accetta / Rifiuta).
+    RemoteXCondivisione.shared.avvia(in: window)
   }
     
   public func dummyMethodToEnforceBundling() {
