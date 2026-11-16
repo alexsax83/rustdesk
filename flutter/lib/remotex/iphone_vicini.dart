@@ -431,9 +431,23 @@ class _Sessione extends ChangeNotifier {
 class RemoteXIPhoneVicini extends StatelessWidget {
   const RemoteXIPhoneVicini({super.key});
 
+  static Future<String?> _mioIndirizzo() async {
+    try {
+      for (final i in await NetworkInterface.list(type: InternetAddressType.IPv4)) {
+        for (final a in i.addresses) {
+          final p = a.rawAddress;
+          if (p[0] == 10 || (p[0] == 172 && p[1] >= 16 && p[1] <= 31) || (p[0] == 192 && p[1] == 168)) {
+            return a.address;
+          }
+        }
+      }
+    } catch (_) {}
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Card(
+    final lista = Card(
       margin: const EdgeInsets.symmetric(vertical: 8),
       child: ListTile(
         leading: const Icon(Icons.phone_iphone),
@@ -443,6 +457,25 @@ class RemoteXIPhoneVicini extends StatelessWidget {
         onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PaginaIPhoneVicini())),
       ),
     );
+    if (!Platform.isIOS) return lista;
+    // Su iPhone e iPad: l'indirizzo con cui gli altri vedono questo schermo.
+    return Column(children: [
+      Card(
+        margin: const EdgeInsets.only(top: 8),
+        child: FutureBuilder<String?>(
+          future: _mioIndirizzo(),
+          builder: (context, s) => ListTile(
+            leading: const Icon(Icons.wifi),
+            title: const Text('Il tuo indirizzo'),
+            subtitle: Text(s.data == null
+                ? 'Collegati a una rete Wi‑Fi'
+                : '${s.data}\nChi ti aiuta sullo stesso Wi‑Fi ti trova da solo; se non ti trova, dagli questo indirizzo.'),
+            isThreeLine: s.data != null,
+          ),
+        ),
+      ),
+      lista,
+    ]);
   }
 }
 
