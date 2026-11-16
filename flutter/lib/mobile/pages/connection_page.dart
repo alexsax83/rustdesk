@@ -1,3 +1,4 @@
+import 'package:flutter_hbb/remotex/iphone_vicini.dart';
 import 'dart:async';
 
 import 'package:auto_size_text_field/auto_size_text_field.dart';
@@ -87,6 +88,7 @@ class _ConnectionPageState extends State<ConnectionPage> {
           if (!bind.isCustomClient() && !isIOS)
             Obx(() => _buildUpdateUI(stateGlobal.updateUrl.value)),
           _buildRemoteIDTextField(),
+          const RemoteXIPhoneVicini(),
         ])),
         SliverFillRemaining(
           hasScrollBody: true,

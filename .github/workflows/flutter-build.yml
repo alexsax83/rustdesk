@@ -897,6 +897,20 @@ jobs:
           # for easy debugging
           flutter build ipa --release --no-codesign
 
+      - name: Remote X - prepara remote_x_ios.ipa (senza firma, si firma sul Mac)
+        shell: bash
+        run: |
+          APP=flutter/build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app
+          ls -la "$APP"
+          rm -rf Payload && mkdir Payload && cp -R "$APP" Payload/Runner.app
+          zip -qry remote_x_ios.ipa Payload
+
+      - name: Remote X - pubblica remote_x_ios.ipa
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ env.TAG_NAME }}" remote_x_ios.ipa --clobber --repo "${{ github.repository }}"
+
       # - name: Upload Artifacts
       #   # if: env.ANDROID_SIGNING_KEY != null && env.UPLOAD_ARTIFACT == 'true'
       #   uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

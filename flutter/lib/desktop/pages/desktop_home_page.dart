@@ -1,3 +1,4 @@
+import 'package:flutter_hbb/remotex/iphone_vicini.dart';
 import 'dart:async';
 import 'dart:io';
 import 'dart:convert';
@@ -92,6 +93,9 @@ class _DesktopHomePageState extends State<DesktopHomePage>
       buildTip(context),
       if (!isOutgoingOnly) buildIDBoard(context),
       if (!isOutgoingOnly) buildPasswordBoard(context),
+      const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 16),
+          child: RemoteXIPhoneVicini()),
       FutureBuilder<Widget>(
         future: Future.value(
             Obx(() => buildHelpCards(stateGlobal.updateUrl.value))),

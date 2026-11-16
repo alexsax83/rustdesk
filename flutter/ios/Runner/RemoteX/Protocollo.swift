@@ -29,6 +29,9 @@ enum RemoteXRete {
     static let servizioRichiesta = "_remotexr._tcp"     // prima volta senza codice: richiesta da confermare
     static let portaRichiesta: NWEndpoint.Port = 47814
     static let portaTrasmissione: NWEndpoint.Port = 47815  // lo schermo arriva dall'estensione di iOS, anche ad app chiusa
+    static let portaJpeg: NWEndpoint.Port = 47816          // stesso schermo in JPEG, senza TLS (solo cifratura del Canale)
+    static let portaSonda: NWEndpoint.Port = 47817         // UDP: «chi c'è?» per Windows e Android, che non usano Bonjour
+    static let sonda = Data("RemoteX-chi-c-e-v1".utf8)
 
     /// Richiesta senza codice: la cifratura c'è sempre (X25519 + ChaCha20-Poly1305),
     /// l'autenticazione la dà la persona che tocca «Consenti» dopo aver confrontato
@@ -148,6 +151,7 @@ enum TipoMessaggio: UInt8 {
     case richiesta = 7          // nome di chi chiede di vedere lo schermo
     case consenso = 8           // la persona ha toccato «Consenti»
     case sessione = 9           // 32 byte: chiave della sessione per collegarsi alla trasmissione
+    case jpeg = 10              // un'immagine JPEG dello schermo (per Windows, Android e l'app iPhone)
 }
 
 struct Messaggio {

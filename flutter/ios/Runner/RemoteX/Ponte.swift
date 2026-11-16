@@ -10,6 +10,7 @@ import UIKit
 import AVFoundation
 import CryptoKit
 import ReplayKit
+import UserNotifications
 
 @MainActor
 final class Ponte: ObservableObject {
@@ -46,6 +47,27 @@ final class Ponte: ObservableObject {
         avviaAbbinati()
         avviaAbbinamento()
         avviaRichieste()
+        avviaSonda()
+    }
+
+    /// Windows e Android cercano gli iPhone chiedendo a tutta la rete «chi c'è?» (UDP):
+    /// si risponde con il nome. Nessun dato personale, nessun collegamento.
+    private var sonda: NWListener?
+    private func avviaSonda() {
+        let p = NWParameters.udp
+        p.allowLocalEndpointReuse = true
+        guard let l = try? NWListener(using: p, on: RemoteXRete.portaSonda) else { return }
+        let coda = self.coda
+        let risposta = Data(("RemoteX-io-v1\n" + nomeDispositivo()).utf8)
+        l.newConnectionHandler = { c in
+            c.start(queue: coda)
+            c.receiveMessage { d, _, _, _ in
+                guard d == RemoteXRete.sonda else { c.cancel(); return }
+                c.send(content: risposta, completion: .contentProcessed { _ in c.cancel() })
+            }
+        }
+        l.start(queue: coda)
+        sonda = l
     }
 
     func rigeneraCodice() {
@@ -233,6 +255,8 @@ final class Ponte: ObservableObject {
     /// Accetta: chi aiuta riceve la chiave della sessione e lo schermo parte.
     func consenti() {
         guard let ch = inAttesaDiConsenso, let k = chiaveInAttesa else { richiesta = nil; return }
+        // Serve per far sapere dove indica chi aiuta, anche quando si usa un'altra app.
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
         inAttesaDiConsenso = nil
         chiaveInAttesa = nil
         richiesta = nil
