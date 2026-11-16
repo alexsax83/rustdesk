@@ -21,6 +21,12 @@ final class Ponte: ObservableObject {
     @Published var richiesta: RichiestaInArrivo?
     /// Lo schermo è in trasmissione (iOS lo segnala con UIScreen.isCaptured).
     @Published var trasmissioneAttiva = UIScreen.main.isCaptured
+    /// Messaggio breve dopo «Termina», così si vede che è finita davvero.
+    @Published var avviso: String?
+    /// Finestrella con la freccia di chi aiuta: spenta di base, si accende nelle Impostazioni.
+    @Published var frecciaVisibile = UserDefaults.standard.bool(forKey: "frecciaVisibile") {
+        didSet { UserDefaults.standard.set(frecciaVisibile, forKey: "frecciaVisibile") }
+    }
 
     private let coda = DispatchQueue(label: "remotex.ponte")
     private var ascoltoAbbinamento: NWListener?
@@ -315,17 +321,19 @@ final class Ponte: ObservableObject {
             // Trasmissione già attiva: si usa la chiave con cui è partita.
             if let attuale = Portachiavi.leggi("sessione", gruppo: Portachiavi.gruppoCondiviso) {
                 ch.invia(.sessione, attuale)
-                PuntatoreRemoto.shared.avvia(chiave: attuale)
+                if frecciaVisibile { PuntatoreRemoto.shared.avvia(chiave: attuale) }
             }
         } else {
             Portachiavi.scrivi(k, "sessione", gruppo: Portachiavi.gruppoCondiviso)
             ch.invia(.sessione, k)
-            PuntatoreRemoto.shared.avvia(chiave: k)
+            if frecciaVisibile { PuntatoreRemoto.shared.avvia(chiave: k) }
         }
     }
 
     func terminaAiutante() {
         PuntatoreRemoto.shared.ferma()
+        avviso = "Condivisione terminata: nessuno vede più il tuo schermo"
+        DispatchQueue.main.asyncAfter(deadline: .now() + 4) { [weak self] in self?.avviso = nil }
         // Senza chiave di sessione l'estensione chiude da sola la trasmissione.
         Portachiavi.cancella("sessione", gruppo: Portachiavi.gruppoCondiviso)
         aiutante?.chiudi()
