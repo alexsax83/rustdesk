@@ -11,6 +11,7 @@ import AVFoundation
 import CryptoKit
 import ReplayKit
 import UserNotifications
+import AVKit
 
 @MainActor
 final class Ponte: ObservableObject {
@@ -41,6 +42,7 @@ final class Ponte: ObservableObject {
             Task { @MainActor in
                 guard let self else { return }
                 self.trasmissioneAttiva = UIScreen.main.isCaptured
+                if !UIScreen.main.isCaptured { PuntatoreRemoto.shared.ferma() }
                 if UIScreen.main.isCaptured && self.richiesta != nil { self.consenti() }
             }
         }
@@ -153,6 +155,10 @@ final class Ponte: ObservableObject {
             Task { @MainActor in
                 guard let self else { return }
                 if m.tipo == .videoQui { self.ricordaDestinazione(ch, m.dati) }
+                if self.aiutante === ch, let t = decodificaTocco(m.dati) {
+                    if m.tipo == .puntatore { PuntatoreRemoto.shared.punta(t.0, t.1) }
+                    if m.tipo == .tocco { PuntatoreRemoto.shared.tocca(t.0, t.1) }
+                }
                 guard m.tipo == .richiesta else { return }
                 self.mostraRichiesta(ch, nome: String(decoding: m.dati.prefix(80), as: UTF8.self), conCodice: conCodice)
             }
@@ -173,6 +179,7 @@ final class Ponte: ObservableObject {
     private func aiutanteChiuso(_ ch: Canale, eraPronto: Bool, conCodice: Bool) {
         if inCorso === ch { inCorso = nil }
         if aiutante === ch {
+            PuntatoreRemoto.shared.ferma()
             aiutante = nil
             aiutanteCollegato = false
             stato = "Nessuno collegato"
@@ -210,6 +217,10 @@ final class Ponte: ObservableObject {
             Task { @MainActor in
                 guard let self else { return }
                 if m.tipo == .videoQui { self.ricordaDestinazione(ch, m.dati) }
+                if self.aiutante === ch, let t = decodificaTocco(m.dati) {
+                    if m.tipo == .puntatore { PuntatoreRemoto.shared.punta(t.0, t.1) }
+                    if m.tipo == .tocco { PuntatoreRemoto.shared.tocca(t.0, t.1) }
+                }
                 guard m.tipo == .richiesta else { return }
                 self.mostraRichiesta(ch, nome: String(decoding: m.dati.prefix(80), as: UTF8.self), conCodice: false)
             }
@@ -306,14 +317,19 @@ final class Ponte: ObservableObject {
         if richiestaConCodice { rigeneraCodice() }   // il codice usato non vale più
         if UIScreen.main.isCaptured {
             // Trasmissione già attiva: si usa la chiave con cui è partita.
-            if let attuale = Portachiavi.leggi("sessione", gruppo: Portachiavi.gruppoCondiviso) { ch.invia(.sessione, attuale) }
+            if let attuale = Portachiavi.leggi("sessione", gruppo: Portachiavi.gruppoCondiviso) {
+                ch.invia(.sessione, attuale)
+                PuntatoreRemoto.shared.avvia(chiave: attuale)
+            }
         } else {
             Portachiavi.scrivi(k, "sessione", gruppo: Portachiavi.gruppoCondiviso)
             ch.invia(.sessione, k)
+            PuntatoreRemoto.shared.avvia(chiave: k)
         }
     }
 
     func terminaAiutante() {
+        PuntatoreRemoto.shared.ferma()
         // Senza chiave di sessione l'estensione chiude da sola la trasmissione.
         Portachiavi.cancella("sessione", gruppo: Portachiavi.gruppoCondiviso)
         aiutante?.chiudi()
@@ -381,4 +397,197 @@ enum AvvioTrasmissione {
         guard !UIScreen.main.isCaptured else { return }
         selettore.premi()
     }
+}
+
+// MARK: - Puntatore di chi aiuta, visibile sull'iPhone
+
+/// Vista il cui strato mostra immagini già pronte (serve al Picture in Picture).
+final class VistaStrato: UIView {
+    override class var layerClass: AnyClass { AVSampleBufferDisplayLayer.self }
+    var strato: AVSampleBufferDisplayLayer { layer as! AVSampleBufferDisplayLayer }
+}
+
+/// iOS non permette di disegnare sopra le altre app. L'unico modo per far vedere
+/// dove indica chi aiuta è una piccola finestra mobile (Picture in Picture): mostra
+/// lo schermo in miniatura con la freccia di chi aiuta e un cerchio dove tocca.
+/// Si sposta, si ingrandisce con due dita o si nasconde a lato con un gesto.
+@MainActor
+final class PuntatoreRemoto: NSObject, AVPictureInPictureSampleBufferPlaybackDelegate {
+    static let shared = PuntatoreRemoto()
+    let vista: VistaStrato = {
+        let v = VistaStrato(frame: CGRect(x: 0, y: 0, width: 30, height: 60))
+        v.strato.videoGravity = .resizeAspect
+        v.backgroundColor = .black
+        v.layer.cornerRadius = 4
+        v.clipsToBounds = true
+        return v
+    }()
+    private var pip: AVPictureInPictureController?
+    private var ascolto: NWListener?
+    private var canale: Canale?
+    private var miniatura: CGImage?
+    private var punto: CGPoint?
+    private var ultimoMovimento = Date.distantPast
+    private var tocchi: [(CGPoint, Date)] = []
+    private var timer: Timer?
+    private var attivo = false
+    private let codaRete = DispatchQueue(label: "remotex.puntatore")
+
+    func avvia(chiave: Data) {
+        guard !attivo else { return }
+        attivo = true
+        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [.mixWithOthers])
+        try? AVAudioSession.sharedInstance().setActive(true)
+        ascolta(chiave: SymmetricKey(data: chiave))
+        timer = Timer.scheduledTimer(withTimeInterval: 1.0 / 15, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.disegna() }
+        }
+        disegna()
+        if pip == nil, AVPictureInPictureController.isPictureInPictureSupported() {
+            let p = AVPictureInPictureController(contentSource: .init(sampleBufferDisplayLayer: vista.strato, playbackDelegate: self))
+            p.canStartPictureInPictureAutomaticallyFromInline = true
+            p.requiresLinearPlayback = true
+            pip = p
+        }
+        prova(5)
+    }
+
+    /// Il Picture in Picture parte solo quando è pronto: si riprova qualche volta.
+    private func prova(_ volte: Int) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) { [weak self] in
+            guard let self, self.attivo, let p = self.pip, !p.isPictureInPictureActive else { return }
+            if p.isPictureInPicturePossible { p.startPictureInPicture() } else if volte > 0 { self.prova(volte - 1) }
+        }
+    }
+
+    func ferma() {
+        guard attivo else { return }
+        attivo = false
+        pip?.stopPictureInPicture()
+        timer?.invalidate(); timer = nil
+        ascolto?.cancel(); ascolto = nil
+        canale?.chiudi(); canale = nil
+        miniatura = nil; punto = nil; tocchi = []
+        vista.strato.flushAndRemoveImage()
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+    }
+
+    func punta(_ x: Float, _ y: Float) {
+        if x < 0 || y < 0 { punto = nil; return }
+        punto = CGPoint(x: CGFloat(min(max(x, 0), 1)), y: CGFloat(min(max(y, 0), 1)))
+        ultimoMovimento = Date()
+    }
+
+    func tocca(_ x: Float, _ y: Float) {
+        let p = CGPoint(x: CGFloat(min(max(x, 0), 1)), y: CGFloat(min(max(y, 0), 1)))
+        punto = p
+        ultimoMovimento = Date()
+        tocchi.append((p, Date()))
+    }
+
+    /// Miniature dello schermo dall'estensione, sullo stesso iPhone, cifrate con la chiave della sessione.
+    private func ascolta(chiave: SymmetricKey) {
+        guard let l = try? NWListener(using: RemoteXRete.parametriInterni(), on: RemoteXRete.portaInterna) else { return }
+        l.newConnectionHandler = { [weak self] c in
+            let ch = Canale(c, psk: chiave)
+            ch.onMessaggio = { m in
+                guard m.tipo == .jpeg, let img = UIImage(data: m.dati)?.cgImage else { return }
+                Task { @MainActor in self?.miniatura = img }
+            }
+            Task { @MainActor in
+                self?.canale?.chiudi()
+                self?.canale = ch
+                ch.avvia(coda: self?.codaRete ?? .main)
+            }
+        }
+        l.start(queue: codaRete)
+        ascolto = l
+    }
+
+    private func disegna() {
+        guard attivo else { return }
+        let w = 360
+        let h = miniatura.map { max(200, Int(Double($0.height) * 360 / Double(max($0.width, 1)))) } ?? 780
+        var pb: CVPixelBuffer?
+        CVPixelBufferCreate(nil, w, h, kCVPixelFormatType_32BGRA,
+                            [kCVPixelBufferIOSurfacePropertiesKey: [:]] as CFDictionary, &pb)
+        guard let pb else { return }
+        CVPixelBufferLockBaseAddress(pb, [])
+        if let ctx = CGContext(data: CVPixelBufferGetBaseAddress(pb), width: w, height: h, bitsPerComponent: 8,
+                               bytesPerRow: CVPixelBufferGetBytesPerRow(pb), space: CGColorSpaceCreateDeviceRGB(),
+                               bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue) {
+            let tutto = CGRect(x: 0, y: 0, width: w, height: h)
+            ctx.setFillColor(UIColor(white: 0.12, alpha: 1).cgColor)
+            ctx.fill(tutto)
+            if let m = miniatura { ctx.draw(m, in: tutto) }
+            let ora = Date()
+            tocchi.removeAll { ora.timeIntervalSince($0.1) > 0.9 }
+            for (p, t) in tocchi {
+                let eta = CGFloat(ora.timeIntervalSince(t)) / 0.9
+                let c = CGPoint(x: p.x * CGFloat(w), y: (1 - p.y) * CGFloat(h))
+                let r = 10 + eta * 40
+                ctx.setStrokeColor(UIColor.systemOrange.withAlphaComponent(1 - eta).cgColor)
+                ctx.setLineWidth(5)
+                ctx.strokeEllipse(in: CGRect(x: c.x - r, y: c.y - r, width: 2 * r, height: 2 * r))
+            }
+            if let p = punto, ora.timeIntervalSince(ultimoMovimento) < 6 {
+                let c = CGPoint(x: p.x * CGFloat(w), y: (1 - p.y) * CGFloat(h))
+                // Alone rosso che pulsa, per trovarla subito.
+                let fase = CGFloat(sin(ora.timeIntervalSinceReferenceDate * 6) * 0.5 + 0.5)
+                let alone = 16 + fase * 8
+                ctx.setFillColor(UIColor.systemRed.withAlphaComponent(0.35).cgColor)
+                ctx.fillEllipse(in: CGRect(x: c.x - alone, y: c.y - alone, width: 2 * alone, height: 2 * alone))
+                // Freccia classica con la punta esattamente sul punto.
+                let punte: [(CGFloat, CGFloat)] = [(0, 0), (0, -26), (6.5, -20), (11, -30), (15.5, -28), (11, -18.5), (19, -18.5)]
+                let forma = punte.map { CGPoint(x: c.x + $0.0, y: c.y + $0.1) }
+                ctx.beginPath(); ctx.addLines(between: forma); ctx.closePath()
+                ctx.setFillColor(UIColor.white.cgColor)
+                ctx.setStrokeColor(UIColor.black.cgColor)
+                ctx.setLineWidth(2)
+                ctx.drawPath(using: .fillStroke)
+            }
+        }
+        CVPixelBufferUnlockBaseAddress(pb, [])
+
+        var formato: CMVideoFormatDescription?
+        CMVideoFormatDescriptionCreateForImageBuffer(allocator: nil, imageBuffer: pb, formatDescriptionOut: &formato)
+        guard let formato else { return }
+        var tempi = CMSampleTimingInfo(duration: CMTime(value: 1, timescale: 15),
+                                       presentationTimeStamp: CMClockGetTime(CMClockGetHostTimeClock()), decodeTimeStamp: .invalid)
+        var sb: CMSampleBuffer?
+        CMSampleBufferCreateReadyWithImageBuffer(allocator: nil, imageBuffer: pb, formatDescription: formato,
+                                                 sampleTiming: &tempi, sampleBufferOut: &sb)
+        guard let sb else { return }
+        if let arr = CMSampleBufferGetSampleAttachmentsArray(sb, createIfNecessary: true), CFArrayGetCount(arr) > 0 {
+            let d = unsafeBitCast(CFArrayGetValueAtIndex(arr, 0), to: CFMutableDictionary.self)
+            CFDictionarySetValue(d, Unmanaged.passUnretained(kCMSampleAttachmentKey_DisplayImmediately).toOpaque(),
+                                 Unmanaged.passUnretained(kCFBooleanTrue).toOpaque())
+        }
+        if vista.strato.status == .failed { vista.strato.flush() }
+        vista.strato.enqueue(sb)
+    }
+
+    // Una finestra «dal vivo»: niente pausa, niente avanti/indietro.
+    nonisolated func pictureInPictureController(_ c: AVPictureInPictureController, setPlaying playing: Bool) {}
+    nonisolated func pictureInPictureControllerTimeRangeForPlayback(_ c: AVPictureInPictureController) -> CMTimeRange {
+        CMTimeRange(start: .negativeInfinity, duration: .positiveInfinity)
+    }
+    nonisolated func pictureInPictureControllerIsPlaybackPaused(_ c: AVPictureInPictureController) -> Bool { false }
+    nonisolated func pictureInPictureController(_ c: AVPictureInPictureController, didTransitionToRenderSize s: CMVideoDimensions) {}
+    nonisolated func pictureInPictureController(_ c: AVPictureInPictureController, skipByInterval i: CMTime,
+                                                completion: @escaping () -> Void) { completion() }
+}
+
+/// Piccola anteprima nella barra in alto (serve anche ad avviare la finestra mobile).
+struct AnteprimaPuntatore: UIViewRepresentable {
+    func makeUIView(context: Context) -> UIView {
+        let c = UIView(frame: CGRect(x: 0, y: 0, width: 30, height: 60))
+        let v = PuntatoreRemoto.shared.vista
+        v.removeFromSuperview()
+        v.frame = c.bounds
+        v.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        c.addSubview(v)
+        return c
+    }
+    func updateUIView(_ uiView: UIView, context: Context) {}
 }

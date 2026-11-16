@@ -32,6 +32,7 @@ class _Tipo {
   static const jpeg = 10;
   static const diagnostica = 11;
   static const videoQui = 12;
+  static const puntatore = 13;
 }
 
 // ---------------------------------------------------------------------------
@@ -413,11 +414,23 @@ class _Sessione extends ChangeNotifier {
     };
   }
 
-  void indica(double x, double y) {
+  static List<int> _xy(double x, double y) {
     final d = ByteData(8)
       ..setFloat32(0, x)
       ..setFloat32(4, y);
-    (_video ?? _richiesta)?.invia(_Tipo.tocco, d.buffer.asUint8List());
+    return d.buffer.asUint8List();
+  }
+
+  /// Un tocco: sull'iPhone compare un cerchio nella finestrella mobile.
+  void indica(double x, double y) => _richiesta?.invia(_Tipo.tocco, _xy(x, y));
+
+  /// La freccia di chi aiuta (null = nascondi), al massimo 20 volte al secondo.
+  DateTime _ultimaFreccia = DateTime(2000);
+  void punta(Offset? p) {
+    final ora = DateTime.now();
+    if (p != null && ora.difference(_ultimaFreccia).inMilliseconds < 50) return;
+    _ultimaFreccia = ora;
+    _richiesta?.invia(_Tipo.puntatore, p == null ? _xy(-1, -1) : _xy(p.dx, p.dy));
   }
 
   void termina() {
@@ -699,8 +712,14 @@ class _PaginaSchermoIPhoneState extends State<PaginaSchermoIPhone> {
           : c.maxHeight / dim.height;
       final w = dim.width * scala, h = dim.height * scala;
       final area = Rect.fromLTWH((c.maxWidth - w) / 2, (c.maxHeight - h) / 2, w, h);
-      return GestureDetector(
+      Offset? normalizza(Offset p) =>
+          area.contains(p) ? Offset((p.dx - area.left) / area.width, (p.dy - area.top) / area.height) : null;
+      return MouseRegion(
+        onHover: (e) => _s.punta(normalizza(e.localPosition)),
+        onExit: (_) => _s.punta(null),
+        child: GestureDetector(
         behavior: HitTestBehavior.opaque,
+        onPanUpdate: (d) => _s.punta(normalizza(d.localPosition)),
         onTapUp: (d) {
           final p = d.localPosition;
           if (!area.contains(p)) return;
@@ -746,7 +765,7 @@ class _PaginaSchermoIPhoneState extends State<PaginaSchermoIPhone> {
               ),
             ),
         ]),
-      );
+      ));
     });
   }
 }

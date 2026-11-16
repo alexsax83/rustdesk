@@ -123,6 +123,9 @@ struct BarraCondivisione: View {
 
     var body: some View {
         HStack(spacing: 10) {
+            if ponte.trasmissioneAttiva {
+                AnteprimaPuntatore().frame(width: 18, height: 36)
+            }
             Circle().fill(ponte.trasmissioneAttiva ? Color.red : Color.orange).frame(width: 10, height: 10)
             Text(ponte.trasmissioneAttiva ? "Stai mostrando il tuo schermo" : "Manca «Inizia condivisione»")
                 .font(.callout.weight(.medium)).lineLimit(1).minimumScaleFactor(0.8)

@@ -144,6 +144,7 @@ enum TipoMessaggio: UInt8 {
     case sessione = 9           // 32 byte: chiave della sessione per collegarsi alla trasmissione
     case jpeg = 10              // un'immagine JPEG dello schermo (per Windows, Android e l'app iPhone)
     case diagnostica = 11       // testo: a che punto è la trasmissione sull'iPhone
+    case puntatore = 13         // x, y della freccia di chi aiuta (negativi = nascondi)
     case videoQui = 12          // 2 byte porta + 1 byte formato (1 H.264, 2 JPEG): dove mandare lo schermo
 }
 
