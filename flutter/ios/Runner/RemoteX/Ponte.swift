@@ -243,6 +243,8 @@ final class Ponte: ObservableObject {
         chiaveInAttesa = k
         if !UIScreen.main.isCaptured { Portachiavi.scrivi(k, "sessione", gruppo: Portachiavi.gruppoCondiviso) }
         richiesta = RichiestaInArrivo(nome: nome.isEmpty ? "Un dispositivo" : nome, numero: ch.numeroControllo ?? "----")
+        // Un solo tocco: compare subito la finestra di iOS; «Inizia condivisione» vale come Accetta.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { AvvioTrasmissione.avvia() }
     }
 
     private func annullaRichiesta() {
@@ -275,8 +277,6 @@ final class Ponte: ObservableObject {
         } else {
             Portachiavi.scrivi(k, "sessione", gruppo: Portachiavi.gruppoCondiviso)
             ch.invia(.sessione, k)
-            // Apre subito la conferma di iOS «Avvia trasmissione».
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { AvvioTrasmissione.avvia() }
         }
     }
 
@@ -307,7 +307,7 @@ struct RichiestaInArrivo: Identifiable {
 
 /// Il pulsante di sistema che avvia la trasmissione, steso su tutta la sua area:
 /// sta (invisibile) sopra il pulsante «Accetta», così un solo tocco accetta e
-/// apre la conferma obbligatoria di iOS «Avvia trasmissione».
+/// apre la conferma obbligatoria di iOS «Inizia condivisione».
 final class SelettorePieno: RPSystemBroadcastPickerView {
     var alTocco: (() -> Void)?
     private var agganciati = Set<ObjectIdentifier>()
@@ -340,7 +340,7 @@ final class SelettorePieno: RPSystemBroadcastPickerView {
 }
 
 /// Un solo pulsante di sistema, sempre presente nella finestra (quasi invisibile):
-/// dopo «Accetta» l'app lo preme e iOS mostra «Avvia trasmissione».
+/// dopo «Accetta» l'app lo preme e iOS mostra «Inizia condivisione».
 @MainActor
 enum AvvioTrasmissione {
     static let selettore = SelettorePieno(frame: CGRect(x: 0, y: 0, width: 4, height: 4))

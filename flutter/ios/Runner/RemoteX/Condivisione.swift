@@ -2,7 +2,7 @@
 // Gira accanto all'interfaccia principale (quella che comanda Mac, PC e Android).
 // Quando qualcuno sullo stesso Wi‑Fi chiede di vedere lo schermo compare un solo
 // messaggio, Accetta o Rifiuta. Accetta avvia anche la condivisione; iOS chiede poi
-// la sua conferma obbligatoria «Avvia trasmissione». Dopo, nessun'altra finestra.
+// la sua conferma obbligatoria «Inizia condivisione». Dopo, nessun'altra finestra.
 
 import UIKit
 import SwiftUI
@@ -96,14 +96,14 @@ struct RichiestaSchermo: View {
                         .font(.footnote).foregroundColor(.secondary)
                 }
                 VStack(spacing: 8) {
-                    Button { ponte.consenti() } label: {
+                    Button { AvvioTrasmissione.avvia() } label: {
                         Text("Accetta")
                             .font(.title3.bold()).foregroundColor(.white)
                             .frame(maxWidth: .infinity, minHeight: 56)
                             .background(RoundedRectangle(cornerRadius: 14).fill(Color.green))
                     }
                     .buttonStyle(.plain)
-                    Text("Subito dopo iPhone chiede ancora una conferma: tocca «Avvia trasmissione».")
+                    Text("Per accettare tocca «Inizia condivisione» nella finestra di iOS. Se l'hai chiusa, tocca Accetta.")
                         .font(.footnote).foregroundColor(.secondary).multilineTextAlignment(.center)
                 }
                 Button { ponte.rifiuta() } label: {
@@ -124,7 +124,7 @@ struct BarraCondivisione: View {
     var body: some View {
         HStack(spacing: 10) {
             Circle().fill(ponte.trasmissioneAttiva ? Color.red : Color.orange).frame(width: 10, height: 10)
-            Text(ponte.trasmissioneAttiva ? "Stai mostrando il tuo schermo" : "Manca «Avvia trasmissione»")
+            Text(ponte.trasmissioneAttiva ? "Stai mostrando il tuo schermo" : "Manca «Inizia condivisione»")
                 .font(.callout.weight(.medium)).lineLimit(1).minimumScaleFactor(0.8)
             Spacer(minLength: 4)
             if !ponte.trasmissioneAttiva {

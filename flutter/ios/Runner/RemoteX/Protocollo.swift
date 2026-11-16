@@ -72,20 +72,10 @@ enum RemoteXRete {
 
     static func chiaveCasuale() -> SymmetricKey { SymmetricKey(size: .bits256) }
 
-    /// Parametri di rete: TLS-PSK + TCP senza ritardi.
-    static func parametri(chiave: SymmetricKey) -> NWParameters {
-        let tls = NWProtocolTLS.Options()
-        let datiChiave = chiave.withUnsafeBytes { DispatchData(bytes: $0) }
-        let identita = Data("remotex-v2".utf8).withUnsafeBytes { DispatchData(bytes: $0) }
-        sec_protocol_options_add_pre_shared_key(tls.securityProtocolOptions, datiChiave as __DispatchData, identita as __DispatchData)
-        sec_protocol_options_append_tls_ciphersuite(tls.securityProtocolOptions,
-                                                    tls_ciphersuite_t(rawValue: UInt16(TLS_PSK_WITH_AES_128_GCM_SHA256))!)
-        let tcp = NWProtocolTCP.Options()
-        tcp.noDelay = true
-        let p = NWParameters(tls: tls, tcp: tcp)
-        p.includePeerToPeer = true
-        return p
-    }
+    /// Parametri di rete: TCP senza ritardi. La sicurezza la dà il Canale: la chiave
+    /// condivisa entra nella derivazione delle chiavi (chi non la conosce non supera la
+    /// conferma) e ogni messaggio è cifrato e autenticato con ChaCha20-Poly1305.
+    static func parametri(chiave: SymmetricKey) -> NWParameters { parametriAperti() }
 
     static func parametriInterni() -> NWParameters {
         let tcp = NWProtocolTCP.Options()

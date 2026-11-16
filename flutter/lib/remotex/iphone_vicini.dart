@@ -333,14 +333,14 @@ class _Sessione extends ChangeNotifier {
       c.onPronto = () {
         c.invia(_Tipo.richiesta, utf8.encode(nome));
         numero = c.numeroControllo;
-        _aggiorna(StatoSessione.attesaAccetta, 'Sull\'altro dispositivo deve toccare «Accetta»');
+        _aggiorna(StatoSessione.attesaAccetta, 'Sull\'altro dispositivo deve toccare «Inizia condivisione»');
       };
       c.onMessaggio = (tipo, dati) {
         if (tipo == _Tipo.consenso) {
-          _aggiorna(StatoSessione.attesaTrasmissione, 'Accettato. Ora sull\'altro dispositivo deve toccare «Avvia trasmissione».');
+          _aggiorna(StatoSessione.attesaTrasmissione, 'Accettato. Ora sull\'altro dispositivo deve toccare «Inizia condivisione».');
         } else if (tipo == _Tipo.sessione && dati.length == 32 && _chiaveSessione == null) {
           _chiaveSessione = dati;
-          _aggiorna(StatoSessione.attesaTrasmissione, 'Accettato. Ora sull\'altro dispositivo deve toccare «Avvia trasmissione».');
+          _aggiorna(StatoSessione.attesaTrasmissione, 'Accettato. Ora sull\'altro dispositivo deve toccare «Inizia condivisione».');
           _collegaVideo(60);
         }
       };
@@ -384,7 +384,7 @@ class _Sessione extends ChangeNotifier {
         Future.delayed(const Duration(milliseconds: 1500), () => _collegaVideo(tentativi - 1));
       } else {
         _aggiorna(StatoSessione.finita,
-            'Sull\'altro dispositivo la condivisione non è partita. Riprova: dopo «Accetta» bisogna toccare anche «Avvia trasmissione».');
+            'Sull\'altro dispositivo la condivisione non è partita. Riprova: dopo «Accetta» bisogna toccare anche «Inizia condivisione».');
       }
     }
   }
