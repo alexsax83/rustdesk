@@ -28,6 +28,7 @@ const kUseBothPasswords = "use-both-passwords";
 class ServerModel with ChangeNotifier {
   bool _isStart = false; // Android MainService status
   bool _mediaOk = false;
+  bool _catturaDopoAccetta = false; // Remote X: «Accetta» premuto, si aspetta il permesso di Android
   bool _inputOk = false;
   bool _audioOk = false;
   bool _fileOk = false;
@@ -134,6 +135,16 @@ class ServerModel with ChangeNotifier {
 
   ServerModel(this.parent) {
     _emptyIdShow = translate("Generating ...");
+    // Remote X: su Android il dispositivo è pronto a ricevere richieste appena si apre
+    // l'app; lo schermo si condivide solo dopo «Accetta».
+    if (isAndroid) {
+      Future.delayed(const Duration(seconds: 1), () async {
+        try {
+          await parent.target?.invokeMethod("bind_service");
+          await bind.mainStartService();
+        } catch (_) {}
+      });
+    }
     _serverId = IDTextEditingController(text: _emptyIdShow);
 
     /*
@@ -479,6 +490,10 @@ class ServerModel with ChangeNotifier {
         if (value && !_isStart) {
           startService();
         }
+        if (value && _catturaDopoAccetta) {
+          _catturaDopoAccetta = false;
+          parent.target?.invokeMethod("start_capture");
+        }
         break;
       case "input":
         if (_inputOk != value) {
@@ -572,6 +587,11 @@ class ServerModel with ChangeNotifier {
       scrollToBottom();
       notifyListeners();
       if (isAndroid && !client.authorized) showLoginDialog(client);
+      // Entrato con il codice usa e getta: Android chiede comunque il permesso di condividere.
+      if (isAndroid && client.authorized && !_mediaOk && !client.isFileTransfer) {
+        _catturaDopoAccetta = true;
+        parent.target?.invokeMethod("init_service");
+      }
       if (isAndroid) androidUpdatekeepScreenOn();
     } catch (e) {
       debugPrint("Failed to call loginRequest,error:$e");
@@ -688,7 +708,13 @@ class ServerModel with ChangeNotifier {
     if (res) {
       bind.cmLoginRes(connId: client.id, res: res);
       if (!client.isFileTransfer && !client.isTerminal) {
-        parent.target?.invokeMethod("start_capture");
+        if (isAndroid && !_mediaOk) {
+          // Prima «Accetta», poi Android chiede il permesso di condividere lo schermo.
+          _catturaDopoAccetta = true;
+          parent.target?.invokeMethod("init_service");
+        } else {
+          parent.target?.invokeMethod("start_capture");
+        }
       }
       parent.target?.invokeMethod("cancel_notification", client.id);
       client.authorized = true;

@@ -290,6 +290,14 @@ class MainActivity : FlutterActivity() {
             if (documentPicker.handle(call, result)) return@setMethodCallHandler
             // make sure result will be invoked, otherwise flutter will await forever
             when (call.method) {
+                "bind_service" -> {
+                    // Remote X: il servizio ascolta le richieste senza ancora catturare lo schermo;
+                    // la cattura si chiede solo dopo «Accetta».
+                    Intent(activity, MainService::class.java).also {
+                        bindService(it, serviceConnection, Context.BIND_AUTO_CREATE)
+                    }
+                    result.success(true)
+                }
                 "init_service" -> {
                     Intent(activity, MainService::class.java).also {
                         bindService(it, serviceConnection, Context.BIND_AUTO_CREATE)
