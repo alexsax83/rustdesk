@@ -497,7 +497,11 @@ final class PuntatoreRemoto: NSObject, AVPictureInPictureSampleBufferPlaybackDel
 
     /// Miniature dello schermo dall'estensione, sullo stesso iPhone, cifrate con la chiave della sessione.
     private func ascolta(chiave: SymmetricKey) {
-        guard let l = try? NWListener(using: RemoteXRete.parametriInterni(), on: RemoteXRete.portaInterna) else { return }
+        // Solo 127.0.0.1 (IPv4): è lì che si collega l'estensione.
+        let par = RemoteXRete.parametriInterni()
+        par.requiredLocalEndpoint = .hostPort(host: "127.0.0.1", port: RemoteXRete.portaInterna)
+        par.allowLocalEndpointReuse = true
+        guard let l = try? NWListener(using: par) else { return }
         l.newConnectionHandler = { [weak self] c in
             let ch = Canale(c, psk: chiave)
             ch.onMessaggio = { m in
@@ -531,6 +535,23 @@ final class PuntatoreRemoto: NSObject, AVPictureInPictureSampleBufferPlaybackDel
             ctx.fill(tutto)
             if let m = miniatura { ctx.draw(m, in: tutto) }
             let ora = Date()
+            let indica = punto != nil && ora.timeIntervalSince(ultimoMovimento) < 6
+            let didascalia: String? = miniatura == nil ? "Aspetto l'immagine dello schermo…"
+                : (indica ? nil : "Qui vedrai dove indica chi ti aiuta")
+            if let t = didascalia {
+                ctx.saveGState()
+                ctx.translateBy(x: 0, y: CGFloat(h)); ctx.scaleBy(x: 1, y: -1)
+                UIGraphicsPushContext(ctx)
+                let fascia = CGRect(x: 0, y: 0, width: CGFloat(w), height: 54)
+                UIColor.black.withAlphaComponent(0.65).setFill()
+                UIRectFill(fascia)
+                let st = NSMutableParagraphStyle(); st.alignment = .center
+                (t as NSString).draw(in: fascia.insetBy(dx: 10, dy: 15), withAttributes: [
+                    .font: UIFont.systemFont(ofSize: 19, weight: .semibold),
+                    .foregroundColor: UIColor.white, .paragraphStyle: st])
+                UIGraphicsPopContext()
+                ctx.restoreGState()
+            }
             tocchi.removeAll { ora.timeIntervalSince($0.1) > 0.9 }
             for (p, t) in tocchi {
                 let eta = CGFloat(ora.timeIntervalSince(t)) / 0.9
