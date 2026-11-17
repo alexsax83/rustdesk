@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_hbb/remotex/iphone_vicini.dart';
 import 'package:flutter_hbb/common/formatter/id_formatter.dart';
 import 'package:flutter_hbb/desktop/widgets/refresh_wrapper.dart';
 import 'package:flutter_hbb/desktop/widgets/tabbar_widget.dart';
@@ -2610,6 +2611,13 @@ connect(BuildContext context, String id,
     String? connToken,
     bool? isSharedPassword,
     String loginMethod = ''}) async {
+  // Remote X: 10 cifre senza trattino = codice di un iPhone/iPad, se ne guarda lo schermo da fuori casa.
+  if (RemoteXInternet.eCodiceIPhone(id) && !isFileTransfer && !isTerminal && !isTcpTunneling && !isRDP) {
+    final c = RemoteXInternet.soloCifre(id);
+    Navigator.of(context).push(MaterialPageRoute(
+        builder: (_) => PaginaSchermoIPhone(dispositivo: DispositivoVicino('iPhone o iPad', '', codice: c))));
+    return;
+  }
   // Remote X: «indirizzo-codice» = codice usa e getta, si entra senza chiedere la password.
   final usaEGetta = RegExp(r'^(\d{6,})-(\S+)$').firstMatch(id.replaceAll(' ', ''));
   if (usaEGetta != null && password == null) {

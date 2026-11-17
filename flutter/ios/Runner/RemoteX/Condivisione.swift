@@ -8,6 +8,7 @@ import UIKit
 import SwiftUI
 import Combine
 import ReplayKit
+import Flutter
 
 @MainActor
 final class RemoteXCondivisione {
@@ -17,6 +18,7 @@ final class RemoteXCondivisione {
     private var richiestaVista: UIHostingController<RichiestaSchermo>?
     private var barraVista: UIHostingController<BarraCondivisione>?
     private var osserva: AnyCancellable?
+    private var canaleCodice: FlutterMethodChannel?
 
     func avvia(in window: UIWindow?) {
         guard let window, finestra == nil else { return }
@@ -27,6 +29,18 @@ final class RemoteXCondivisione {
         s.alpha = 0.02
         window.addSubview(s)
         ponte.avvia()
+        // Il codice usa e getta per farsi vedere da fuori casa, mostrato nella schermata principale.
+        if let fvc = window.rootViewController as? FlutterViewController {
+            let c = FlutterMethodChannel(name: "remotex/codice", binaryMessenger: fvc.binaryMessenger)
+            c.setMethodCallHandler { [weak self] call, risposta in
+                Task { @MainActor in
+                    guard let p = self?.ponte else { risposta(nil); return }
+                    if call.method == "nuovo" { p.nuovoCodiceInternet() }
+                    risposta(p.codiceInternet)
+                }
+            }
+            canaleCodice = c
+        }
         osserva = ponte.objectWillChange.sink { [weak self] _ in
             DispatchQueue.main.async { self?.aggiorna() }
         }

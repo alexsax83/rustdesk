@@ -16,6 +16,11 @@ import AVKit
 @MainActor
 final class Ponte: ObservableObject {
     @Published var codice = RemoteXRete.nuovoCodice()
+    /// Codice usa e getta per farsi vedere da fuori casa (10 cifre): cambia dopo ogni collegamento.
+    @Published var codiceInternet = RemoteXInternet.nuovoCodice()
+    private var chiaveInternet: SymmetricKey?
+    private var inAttesaInternet: Canale?
+    private var sessioneInternet: Canale?
     @Published var stato = "Un momento…"
     @Published var aiutanteCollegato = false
     @Published var richiesta: RichiestaInArrivo?
@@ -58,6 +63,44 @@ final class Ponte: ObservableObject {
         avviaAbbinamento()
         avviaRichieste()
         avviaSonda()
+        avviaInternet()
+    }
+
+    // MARK: Da fuori casa: attesa sul ripetitore con il codice usa e getta
+
+    private func avviaInternet() {
+        let codice = codiceInternet
+        DispatchQueue.global(qos: .utility).async {
+            let k = RemoteXInternet.chiave(codice)
+            Task { @MainActor in
+                guard self.codiceInternet == codice else { return }
+                self.chiaveInternet = k
+                self.attendiInternet()
+            }
+        }
+    }
+
+    func nuovoCodiceInternet() {
+        let vecchio = inAttesaInternet
+        inAttesaInternet = nil
+        vecchio?.chiudi()
+        chiaveInternet = nil
+        codiceInternet = RemoteXInternet.nuovoCodice()
+        avviaInternet()
+    }
+
+    /// Il ripetitore tiene in attesa 30 secondi: si rientra in attesa di continuo finché l'app è aperta.
+    private func attendiInternet() {
+        guard let k = chiaveInternet, inAttesaInternet == nil else { return }
+        let ch = Canale(RemoteXInternet.connessione(), psk: k)
+        ch.preambolo = RemoteXInternet.richiesta(uuid: RemoteXInternet.uuid(codiceInternet, "controllo"))
+        inAttesaInternet = ch
+        configuraRichiedente(ch)
+        ch.avvia(coda: coda)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 27) { [weak self, weak ch] in
+            guard let self, let ch, self.inAttesaInternet === ch else { return }
+            ch.chiudi()
+        }
     }
 
     /// Windows e Android cercano gli iPhone chiedendo a tutta la rete «chi c'è?» (UDP):
@@ -221,9 +264,30 @@ final class Ponte: ObservableObject {
         guard aiutante == nil, inCorso == nil, Date() >= bloccatoFino else { c.cancel(); return }
         let ch = Canale(c, psk: RemoteXRete.chiaveRichiesta)
         inCorso = ch
+        configuraRichiedente(ch)
+        ch.avvia(coda: coda)
+        // Senza risposta entro un minuto la richiesta scade.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 60) { [weak self, weak ch] in
+            guard let self, let ch, self.aiutante !== ch, self.inCorso === ch else { return }
+            ch.chiudi()
+        }
+    }
+
+    private func configuraRichiedente(_ ch: Canale) {
         ch.onMessaggio = { [weak self] m in
             Task { @MainActor in
                 guard let self else { return }
+                // Da fuori casa: chi ha il codice è arrivato. 1 a 1: se c'è già qualcuno, si chiude.
+                if self.inAttesaInternet === ch {
+                    self.inAttesaInternet = nil
+                    guard self.aiutante == nil, self.inCorso == nil else { ch.chiudi(); self.attendiInternet(); return }
+                    self.inCorso = ch
+                    self.sessioneInternet = ch
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 90) { [weak self, weak ch] in
+                        guard let self, let ch, self.aiutante !== ch, self.inCorso === ch else { return }
+                        ch.chiudi()
+                    }
+                }
                 if m.tipo == .videoQui { self.ricordaDestinazione(ch, m.dati) }
                 if self.aiutante === ch, let t = decodificaTocco(m.dati) {
                     if m.tipo == .puntatore { PuntatoreRemoto.shared.punta(t.0, t.1) }
@@ -238,17 +302,24 @@ final class Ponte: ObservableObject {
             case .failed, .cancelled:
                 Task { @MainActor in
                     guard let self else { return }
+                    if self.inAttesaInternet === ch {
+                        // Attesa scaduta sul ripetitore: si rientra subito.
+                        self.inAttesaInternet = nil
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in self?.attendiInternet() }
+                        return
+                    }
                     if self.inAttesaDiConsenso === ch { self.annullaRichiesta() }
                     self.aiutanteChiuso(ch, eraPronto: true, conCodice: false)
+                    if self.sessioneInternet === ch {
+                        // Il codice usato da fuori casa non vale più.
+                        self.sessioneInternet = nil
+                        self.nuovoCodiceInternet()
+                    } else if self.inAttesaInternet == nil {
+                        self.attendiInternet()
+                    }
                 }
             default: break
             }
-        }
-        ch.avvia(coda: coda)
-        // Senza risposta entro un minuto la richiesta scade.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 60) { [weak self, weak ch] in
-            guard let self, let ch, self.aiutante !== ch, self.inCorso === ch else { return }
-            ch.chiudi()
         }
     }
 
@@ -267,8 +338,14 @@ final class Ponte: ObservableObject {
     /// Chi guarda dice su quale porta aspetta lo schermo: l'estensione si collegherà lì
     /// (iOS non lascia sempre ricevere collegamenti a un'estensione, uscire sì).
     private func ricordaDestinazione(_ ch: Canale, _ d: Data) {
-        guard d.count == 3, case let .hostPort(host, _)? = ch.connessione.currentPath?.remoteEndpoint else { return }
+        guard d.count == 3 else { return }
         let porta = Int(d[d.startIndex]) << 8 | Int(d[d.startIndex + 1])
+        if porta == 0 {
+            // Da fuori casa: lo schermo passa dal ripetitore.
+            destinazioni[ObjectIdentifier(ch)] = "relay|\(RemoteXInternet.uuid(codiceInternet, "video"))|\(d[d.startIndex + 2])"
+            return
+        }
+        guard case let .hostPort(host, _)? = ch.connessione.currentPath?.remoteEndpoint else { return }
         destinazioni[ObjectIdentifier(ch)] = "\(host)|\(porta)|\(d[d.startIndex + 2])"
     }
 

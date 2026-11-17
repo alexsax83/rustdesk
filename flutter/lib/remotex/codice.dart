@@ -1,6 +1,6 @@
 // Remote X: «Il tuo codice», uguale su tutti i dispositivi (come sul Mac).
 // Indirizzo + codice usa e getta in un'unica riga, con Copia e Nuovo codice.
-// Su iPhone e iPad (che si possono solo guardare) c'è l'indirizzo nella rete.
+// Su iPhone e iPad il codice (10 cifre) serve a far vedere lo schermo da fuori casa.
 
 import 'dart:async';
 import 'dart:io';
@@ -18,6 +18,7 @@ class CodiceRemoteX extends StatefulWidget {
 }
 
 class _CodiceRemoteXState extends State<CodiceRemoteX> {
+  static const _canale = MethodChannel('remotex/codice');
   Timer? _timer;
   String _id = '';
   String _codice = '';
@@ -40,7 +41,11 @@ class _CodiceRemoteXState extends State<CodiceRemoteX> {
   Future<void> _aggiorna() async {
     final ip = await RemoteXIPhoneVicini.mioIndirizzo();
     String id = '', codice = '';
-    if (!Platform.isIOS) {
+    if (Platform.isIOS) {
+      try {
+        id = (await _canale.invokeMethod<String>('codice')) ?? '';
+      } catch (_) {}
+    } else {
       id = (await bind.mainGetMyId()).replaceAll(' ', '');
       codice = await bind.mainGetTemporaryPassword();
     }
@@ -61,18 +66,16 @@ class _CodiceRemoteXState extends State<CodiceRemoteX> {
 
   @override
   Widget build(BuildContext context) {
-    // iPhone e iPad si raggiungono solo sulla stessa rete (si trovano da soli): niente codice.
-    if (Platform.isIOS) return const SizedBox.shrink();
     final t = Theme.of(context).textTheme;
     final ios = Platform.isIOS;
-    final pronto = ios ? _ip != null : _id.length >= 6;
-    final testo = ios ? (_ip ?? '') : _leggibile;
+    final pronto = _id.length >= 6;
+    final testo = ios ? RemoteXInternet.leggibile(_id) : _leggibile;
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 8),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(ios ? 'Il tuo indirizzo' : 'Il tuo codice',
+          Text('Il tuo codice',
               style: t.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
           const SizedBox(height: 6),
           Row(children: [
@@ -86,7 +89,7 @@ class _CodiceRemoteXState extends State<CodiceRemoteX> {
             if (pronto)
               TextButton(
                 onPressed: () {
-                  Clipboard.setData(ClipboardData(text: ios ? testo : (_codice.isEmpty ? _id : '$_id-$_codice')));
+                  Clipboard.setData(ClipboardData(text: ios ? _id : (_codice.isEmpty ? _id : '$_id-$_codice')));
                   setState(() => _copiato = true);
                   Future.delayed(const Duration(seconds: 2), () {
                     if (mounted) setState(() => _copiato = false);
@@ -94,10 +97,16 @@ class _CodiceRemoteXState extends State<CodiceRemoteX> {
                 },
                 child: Text(_copiato ? 'Copiato' : 'Copia'),
               ),
-            if (!ios && _codice.isNotEmpty)
+            if (ios || _codice.isNotEmpty)
               TextButton(
                 onPressed: () async {
-                  await bind.mainUpdateTemporaryPassword();
+                  if (ios) {
+                    try {
+                      await _canale.invokeMethod('nuovo');
+                    } catch (_) {}
+                  } else {
+                    await bind.mainUpdateTemporaryPassword();
+                  }
                   Future.delayed(const Duration(milliseconds: 600), _aggiorna);
                 },
                 child: const Text('Nuovo codice'),
@@ -106,7 +115,7 @@ class _CodiceRemoteXState extends State<CodiceRemoteX> {
           const SizedBox(height: 4),
           Text(
             ios
-                ? 'Sulla stessa rete Wi‑Fi chi ti aiuta ti trova da solo.'
+                ? 'Dai questo codice a chi ti aiuta da fuori casa: vedrà il tuo schermo dopo che tocchi Accetta. Vale per un solo collegamento. Sulla stessa rete Wi‑Fi non serve.'
                 : 'Dai questo codice a chi ti aiuta da fuori casa: vale per un solo collegamento. Sulla stessa rete Wi‑Fi non serve.',
             style: const TextStyle(fontSize: 13, color: Colors.grey),
           ),

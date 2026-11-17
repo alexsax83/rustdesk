@@ -87,6 +87,72 @@ enum RemoteXRete {
     }
 }
 
+// MARK: - Da fuori casa (Internet)
+
+/// iPhone e iPad raggiungibili anche da fuori casa, con un codice usa e getta.
+/// I due dispositivi si incontrano su un ripetitore pubblico (lo stesso usato dal motore di
+/// Remote X per computer e telefoni): passa solo byte cifrati. La chiave nasce dal codice,
+/// che resta sui due dispositivi; in più c'è sempre «Accetta» sull'iPhone.
+enum RemoteXInternet {
+    static let host = "rs-ny.rustdesk.com"
+    static let porta: NWEndpoint.Port = 21117
+    static let chiaveServer = "OeVuKk5nlHiXp+APNn0Y3pC1Iwpwn44JGqrQCsWqmBw="
+
+    /// 10 cifre, es. "4821937065" (si mostra come "48219 37065").
+    static func nuovoCodice() -> String {
+        var c = ""
+        while c.count < 10 {
+            var b: UInt8 = 0
+            repeat { _ = SecRandomCopyBytes(kSecRandomDefault, 1, &b) } while b >= 250
+            let cifra = Int(b) % 10
+            if c.isEmpty && cifra == 0 { continue }
+            c.append(Character(String(cifra)))
+        }
+        return c
+    }
+    static func soloCifre(_ c: String) -> String { c.filter(\.isNumber) }
+    static func leggibile(_ c: String) -> String {
+        let d = soloCifre(c); guard d.count == 10 else { return d }
+        return String(d.prefix(5)) + " " + String(d.suffix(5))
+    }
+    /// Un codice da iPhone/iPad: 10 cifre senza trattino (quelli dei computer hanno il trattino).
+    static func eCodiceIPhone(_ testo: String) -> Bool {
+        let t = testo.filter { !$0.isWhitespace }
+        return t.count == 10 && t.allSatisfy(\.isNumber)
+    }
+    static func uuid(_ codice: String, _ tipo: String) -> String {
+        SHA256.hash(data: Data("RemoteX-internet-v1|\(tipo)|\(soloCifre(codice))".utf8)).map { String(format: "%02x", $0) }.joined()
+    }
+    /// Chiave dal codice (PBKDF2, lento apposta contro i tentativi).
+    static func chiave(_ codice: String) -> SymmetricKey {
+        let pw = Array(soloCifre(codice).utf8)
+        let sale = Array("RemoteX-internet-v1".utf8)
+        var out = [UInt8](repeating: 0, count: 32)
+        CCKeyDerivationPBKDF(CCPBKDFAlgorithm(kCCPBKDF2), pw.map { CChar(bitPattern: $0) }, pw.count, sale, sale.count,
+                             CCPseudoRandomAlgorithm(kCCPRFHmacAlgSHA256), 200_000, &out, out.count)
+        return SymmetricKey(data: out)
+    }
+    private static func varint(_ v: Int) -> Data {
+        var v = v; var d = Data()
+        while v >= 0x80 { d.append(UInt8(v & 0x7f) | 0x80); v >>= 7 }
+        d.append(UInt8(v)); return d
+    }
+    private static func campo(_ n: Int, _ dati: Data) -> Data { varint(n << 3 | 2) + varint(dati.count) + dati }
+    /// Richiesta al ripetitore: «mettimi in contatto con chi usa lo stesso identificativo».
+    static func richiesta(uuid: String) -> Data {
+        let interna = campo(2, Data(uuid.utf8)) + campo(6, Data(chiaveServer.utf8))
+        let m = campo(18, interna)
+        var h = Data()
+        let n = m.count
+        if n <= 0x3F { h.append(UInt8(n << 2)) }
+        else { let v = UInt16(n << 2) | 1; h.append(UInt8(v & 0xff)); h.append(UInt8(v >> 8)) }
+        return h + m
+    }
+    static func connessione() -> NWConnection {
+        NWConnection(to: .hostPort(host: NWEndpoint.Host(host), port: porta), using: RemoteXRete.parametriAperti())
+    }
+}
+
 // MARK: - Portachiavi
 
 enum Portachiavi {
@@ -185,6 +251,8 @@ final class Canale {
     /// Numero di controllo di 4 cifre, uguale sui due dispositivi solo se nessuno si è messo in mezzo.
     private(set) var numeroControllo: String?
 
+    /// Dati da mandare prima di tutto (la richiesta al ripetitore, da fuori casa).
+    var preambolo: Data?
     private let psk: SymmetricKey
     private let effimera = Curve25519.KeyAgreement.PrivateKey()
     private let lock = NSLock()
@@ -204,8 +272,16 @@ final class Canale {
     func avvia(coda: DispatchQueue) {
         connessione.stateUpdateHandler = { [weak self] s in self?.onStato?(s) }
         connessione.start(queue: coda)
-        // Chiave pubblica effimera, in chiaro dentro il TLS.
-        lock.lock(); scriviBlocco(effimera.publicKey.rawRepresentation); lock.unlock()
+        if let p = preambolo {
+            connessione.send(content: p, completion: .contentProcessed { _ in })
+            coda.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+                guard let self else { return }
+                self.lock.lock(); self.scriviBlocco(self.effimera.publicKey.rawRepresentation); self.lock.unlock()
+            }
+        } else {
+            // Chiave pubblica effimera, in chiaro dentro il TLS.
+            lock.lock(); scriviBlocco(effimera.publicKey.rawRepresentation); lock.unlock()
+        }
         ricevi()
     }
 

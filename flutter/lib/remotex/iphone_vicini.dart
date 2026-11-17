@@ -210,7 +210,66 @@ class _Canale {
 class DispositivoVicino {
   final String nome;
   final String ip;
-  DispositivoVicino(this.nome, this.ip);
+  /// Codice usa e getta dell'iPhone/iPad (10 cifre): si guarda da fuori casa.
+  final String? codice;
+  DispositivoVicino(this.nome, this.ip, {this.codice});
+}
+
+// ---------------------------------------------------------------------------
+// Da fuori casa: i due dispositivi si incontrano su un ripetitore pubblico, che passa
+// solo byte cifrati (la chiave nasce dal codice, che resta sui due dispositivi).
+// ---------------------------------------------------------------------------
+
+class RemoteXInternet {
+  static const host = 'rs-ny.rustdesk.com';
+  static const porta = 21117;
+  static const chiaveServer = 'OeVuKk5nlHiXp+APNn0Y3pC1Iwpwn44JGqrQCsWqmBw=';
+
+  static String soloCifre(String c) => c.replaceAll(RegExp(r'[^0-9]'), '');
+  static bool eCodiceIPhone(String t) => RegExp(r'^[0-9]{10}$').hasMatch(t.replaceAll(RegExp(r'\s'), ''));
+  static String leggibile(String c) {
+    final d = soloCifre(c);
+    return d.length == 10 ? '${d.substring(0, 5)} ${d.substring(5)}' : d;
+  }
+
+  static Future<String> uuid(String codice, String tipo) async {
+    final h = await Sha256().hash(utf8.encode('RemoteX-internet-v1|$tipo|${soloCifre(codice)}'));
+    return h.bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+  }
+
+  static Future<List<int>> chiave(String codice) async {
+    final k = await Pbkdf2(macAlgorithm: Hmac.sha256(), iterations: 200000, bits: 256).deriveKeyFromPassword(
+        password: soloCifre(codice), nonce: utf8.encode('RemoteX-internet-v1'));
+    return k.extractBytes();
+  }
+
+  static List<int> _varint(int v) {
+    final o = <int>[];
+    while (v >= 0x80) {
+      o.add((v & 0x7f) | 0x80);
+      v >>= 7;
+    }
+    o.add(v);
+    return o;
+  }
+
+  static List<int> _campo(int n, List<int> d) => [..._varint(n << 3 | 2), ..._varint(d.length), ...d];
+
+  static List<int> richiesta(String uuid) {
+    final m = _campo(18, [..._campo(2, utf8.encode(uuid)), ..._campo(6, utf8.encode(chiaveServer))]);
+    final n = m.length;
+    final h = n <= 0x3F ? [n << 2] : [((n << 2) | 1) & 0xff, ((n << 2) | 1) >> 8];
+    return [...h, ...m];
+  }
+
+  /// Collegamento al ripetitore con la richiesta già mandata.
+  static Future<Socket> collega(String uuid) async {
+    final s = await Socket.connect(host, porta, timeout: const Duration(seconds: 8));
+    s.add(richiesta(uuid));
+    await s.flush();
+    await Future.delayed(const Duration(milliseconds: 300));
+    return s;
+  }
 }
 
 /// Ricerca degli iPhone e iPad con Remote X aperta (usata anche da «Dispositivi sulla stessa rete»).
@@ -337,7 +396,59 @@ class _Sessione extends ChangeNotifier {
     return Platform.localHostname;
   }
 
+  Timer? _vivo;
+  bool get _internet => dispositivo.codice != null;
+
+  Future<void> _videoInternet() async {
+    if (_terminata || _chiaveSessione == null || _video != null) return;
+    try {
+      final s = await RemoteXInternet.collega(await RemoteXInternet.uuid(dispositivo.codice!, 'video'));
+      await _attacca(s);
+    } catch (_) {
+      if (!_terminata) Future.delayed(const Duration(seconds: 2), _videoInternet);
+    }
+  }
+
+  Future<void> _avviaInternet() async {
+    final nome = await _mioNome();
+    try {
+      final psk = await RemoteXInternet.chiave(dispositivo.codice!);
+      final s = await RemoteXInternet.collega(await RemoteXInternet.uuid(dispositivo.codice!, 'controllo'));
+      final c = await _Canale.daSocket(s, psk);
+      _richiesta = c;
+      c.onPronto = () {
+        c.invia(_Tipo.videoQui, [0, 0, 2]);
+        c.invia(_Tipo.richiesta, utf8.encode(nome));
+        numero = c.numeroControllo;
+        // Il ripetitore chiude i collegamenti fermi da 30 secondi.
+        _vivo = Timer.periodic(const Duration(seconds: 10), (_) => c.invia(_Tipo.puntatore, _xy(-1, -1)));
+        _aggiorna(StatoSessione.attesaAccetta, 'Sull\'altro dispositivo deve toccare «Accetta»');
+      };
+      c.onMessaggio = (tipo, dati) {
+        if (tipo == _Tipo.consenso) {
+          _aggiorna(StatoSessione.attesaTrasmissione, 'Accettato. Ora sull\'altro dispositivo deve toccare «Inizia condivisione».');
+        } else if (tipo == _Tipo.sessione && dati.length == 32 && _chiaveSessione == null) {
+          _chiaveSessione = dati;
+          _aggiorna(StatoSessione.attesaTrasmissione, 'Accettato. Aspetto lo schermo…');
+          _videoInternet();
+        } else if (tipo == _Tipo.diagnostica && stato != StatoSessione.schermo) {
+          _aggiorna(stato, utf8.decode(dati, allowMalformed: true));
+        }
+      };
+      c.onChiuso = () {
+        _vivo?.cancel();
+        if (_chiaveSessione == null && !_terminata) {
+          _aggiorna(StatoSessione.finita,
+              'Non risponde nessuno con questo codice, oppure l\'altra persona non ha accettato. Controlla il codice e riprova.');
+        }
+      };
+    } catch (_) {
+      _aggiorna(StatoSessione.finita, 'Non riesco a collegarmi. Controlla la connessione a Internet e riprova.');
+    }
+  }
+
   Future<void> avvia() async {
+    if (_internet) return _avviaInternet();
     final psk = (await Sha256().hash(utf8.encode('RemoteX-richiesta-v1'))).bytes;
     final nome = await _mioNome();
     // Lo schermo arriva qui: è l'iPhone che si collega a questo dispositivo.
@@ -414,6 +525,8 @@ class _Sessione extends ChangeNotifier {
         _aggiorna(StatoSessione.finita, 'L\'altra persona ha terminato la condivisione.');
       } else {
         _video = null;
+        // Da fuori casa l'iPhone può arrivare sul ripetitore più tardi: si riprova.
+        if (_internet) Future.delayed(const Duration(seconds: 1), _videoInternet);
       }
     };
   }
@@ -439,6 +552,7 @@ class _Sessione extends ChangeNotifier {
 
   void termina() {
     _terminata = true;
+    _vivo?.cancel();
     _inAttesa?.destroy();
     _ascolto?.close();
     _video?.chiudi();
