@@ -2637,6 +2637,17 @@ fn remotex_impostazioni_bloccate() {
     ] {
         s.insert(k.to_owned(), v.to_owned());
     }
+    drop(s);
+    // Interfaccia essenziale: niente account, rubrica, server o proxy.
+    let mut h = config::HARD_SETTINGS.write().unwrap();
+    for k in ["disable-account", "disable-ab"] {
+        h.insert(k.to_owned(), "Y".to_owned());
+    }
+    drop(h);
+    let mut b = config::BUILTIN_SETTINGS.write().unwrap();
+    for k in ["hide-server-settings", "hide-proxy-settings", "hide-network-settings", "hide-help-cards"] {
+        b.insert(k.to_owned(), "Y".to_owned());
+    }
 }
 
 pub fn read_custom_client(config: &str) {
