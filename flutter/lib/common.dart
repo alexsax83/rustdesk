@@ -2610,6 +2610,12 @@ connect(BuildContext context, String id,
     String? connToken,
     bool? isSharedPassword,
     String loginMethod = ''}) async {
+  // Remote X: «indirizzo-codice» = codice usa e getta, si entra senza chiedere la password.
+  final usaEGetta = RegExp(r'^(\d{6,})-(\S+)$').firstMatch(id.replaceAll(' ', ''));
+  if (usaEGetta != null && password == null) {
+    id = usaEGetta.group(1)!;
+    password = usaEGetta.group(2);
+  }
   if (id == '') return;
   if (!isDesktop || desktopType == DesktopType.main) {
     try {

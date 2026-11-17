@@ -472,15 +472,20 @@ class RemoteXIPhoneVicini extends StatelessWidget {
   const RemoteXIPhoneVicini({super.key});
 
   static Future<String?> _mioIndirizzo() async {
+    // L'indirizzo del Wi‑Fi (en0), non quello della rete cellulare o di una VPN.
     try {
-      for (final i in await NetworkInterface.list(type: InternetAddressType.IPv4)) {
+      String? altro;
+      final elenco = await NetworkInterface.list(type: InternetAddressType.IPv4);
+      elenco.sort((a, b) => (a.name.startsWith('en') ? 0 : 1).compareTo(b.name.startsWith('en') ? 0 : 1));
+      for (final i in elenco) {
+        if (i.name.startsWith('pdp_ip') || i.name.startsWith('utun') || i.name.startsWith('ipsec')) continue;
         for (final a in i.addresses) {
           final p = a.rawAddress;
-          if (p[0] == 10 || (p[0] == 172 && p[1] >= 16 && p[1] <= 31) || (p[0] == 192 && p[1] == 168)) {
-            return a.address;
-          }
+          if (p[0] == 192 && p[1] == 168) return a.address;
+          if (p[0] == 10 || (p[0] == 172 && p[1] >= 16 && p[1] <= 31)) altro ??= a.address;
         }
       }
+      return altro;
     } catch (_) {}
     return null;
   }
