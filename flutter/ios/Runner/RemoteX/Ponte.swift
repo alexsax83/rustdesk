@@ -24,8 +24,8 @@ final class Ponte: ObservableObject {
     /// Messaggio breve dopo «Termina», così si vede che è finita davvero.
     @Published var avviso: String?
     /// Finestrella con la freccia di chi aiuta (si può spegnere nelle Impostazioni).
-    @Published var frecciaVisibile = (UserDefaults.standard.object(forKey: "frecciaVisibile") as? Bool) ?? true {
-        didSet { UserDefaults.standard.set(frecciaVisibile, forKey: "frecciaVisibile") }
+    @Published var frecciaVisibile = UserDefaults.standard.bool(forKey: "frecciaVisibile2") {
+        didSet { UserDefaults.standard.set(frecciaVisibile, forKey: "frecciaVisibile2") }
     }
 
     private let coda = DispatchQueue(label: "remotex.ponte")
@@ -50,6 +50,8 @@ final class Ponte: ObservableObject {
                 self.trasmissioneAttiva = UIScreen.main.isCaptured
                 if !UIScreen.main.isCaptured { PuntatoreRemoto.shared.ferma() }
                 if UIScreen.main.isCaptured && self.richiesta != nil { self.consenti() }
+                // Condivisione partita: Remote X si toglie di mezzo e torna alla schermata Home.
+                if UIScreen.main.isCaptured && self.aiutante != nil { self.vaiInBackground() }
             }
         }
         avviaAbbinati()
@@ -247,6 +249,15 @@ final class Ponte: ObservableObject {
         DispatchQueue.main.asyncAfter(deadline: .now() + 60) { [weak self, weak ch] in
             guard let self, let ch, self.aiutante !== ch, self.inCorso === ch else { return }
             ch.chiudi()
+        }
+    }
+
+    /// Torna alla schermata Home (come premere il tasto Home). Per un'app installata
+    /// direttamente sui propri dispositivi va bene; non è una funzione per l'App Store.
+    private func vaiInBackground() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+            guard UIApplication.shared.applicationState == .active else { return }
+            UIControl().sendAction(NSSelectorFromString("suspend"), to: UIApplication.shared, for: nil)
         }
     }
 
