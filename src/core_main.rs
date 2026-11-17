@@ -466,9 +466,7 @@ pub fn core_main() -> Option<CoreMainAction> {
             return None;
         } else if args[0] == "--remotex-vicini" {
             // Remote X: dispositivi con Remote X aperta sulla stessa rete (id|nome|sistema|ip).
-            if let Ok(rt) = hbb_common::tokio::runtime::Runtime::new() {
-                let _ = rt.block_on(crate::lan::discover());
-            }
+            let _ = crate::lan::discover();
             let mio = hbb_common::config::Config::get_id();
             for p in hbb_common::config::LanPeers::load().peers {
                 if p.id == mio || !p.online {
