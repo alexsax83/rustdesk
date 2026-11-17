@@ -2615,6 +2615,10 @@ fn remotex_impostazioni_bloccate() {
         ("enable-tunnel", "N"),
         ("allow-remote-config-modification", "N"),
         ("direct-server", "Y"),
+        // Codice usa e getta: password temporanea di 6 cifre, cambia dopo ogni collegamento.
+        ("verification-method", "use-both-passwords"),
+        ("temporary-password-length", "6"),
+        ("allow-numeric-one-time-password", "Y"),
     ] {
         s.insert(k.to_owned(), v.to_owned());
     }

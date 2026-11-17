@@ -464,6 +464,19 @@ pub fn core_main() -> Option<CoreMainAction> {
         } else if args[0] == "--get-id" {
             println!("{}", crate::ipc::get_id());
             return None;
+        } else if args[0] == "--remotex-codice" {
+            // Remote X: codice usa e getta (password temporanea, cambia dopo ogni collegamento).
+            // Con «nuovo» ne genera subito un altro.
+            if args.get(1).map(|a| a == "nuovo").unwrap_or(false) {
+                hbb_common::allow_err!(crate::ipc::update_temporary_password());
+                std::thread::sleep(std::time::Duration::from_millis(700));
+            }
+            let codice = crate::ipc::get_config("temporary-password")
+                .ok()
+                .flatten()
+                .unwrap_or_default();
+            println!("{}", codice);
+            return None;
         } else if args[0] == "--set-id" {
             if is_cli_setting_change_disabled() {
                 println!("Settings are disabled!");
@@ -871,6 +884,7 @@ fn is_user_main_ipc_scope_cli_command(args: &[String]) -> bool {
         Some("--password")
             | Some("--set-unlock-pin")
             | Some("--get-id")
+            | Some("--remotex-codice")
             | Some("--set-id")
             | Some("--config")
             | Some("--option")
