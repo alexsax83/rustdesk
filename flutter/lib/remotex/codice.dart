@@ -61,6 +61,8 @@ class _CodiceRemoteXState extends State<CodiceRemoteX> {
 
   @override
   Widget build(BuildContext context) {
+    // iPhone e iPad si raggiungono solo sulla stessa rete (si trovano da soli): niente codice.
+    if (Platform.isIOS) return const SizedBox.shrink();
     final t = Theme.of(context).textTheme;
     final ios = Platform.isIOS;
     final pronto = ios ? _ip != null : _id.length >= 6;
@@ -108,11 +110,6 @@ class _CodiceRemoteXState extends State<CodiceRemoteX> {
                 : 'Dai questo codice a chi ti aiuta da fuori casa: vale per un solo collegamento. Sulla stessa rete Wi‑Fi non serve.',
             style: const TextStyle(fontSize: 13, color: Colors.grey),
           ),
-          if (_ip != null && !ios)
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Text('IP di questo dispositivo: $_ip', style: const TextStyle(fontSize: 12, color: Colors.grey)),
-            ),
         ]),
       ),
     );

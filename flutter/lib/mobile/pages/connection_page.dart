@@ -91,7 +91,6 @@ class _ConnectionPageState extends State<ConnectionPage> {
             Obx(() => _buildUpdateUI(stateGlobal.updateUrl.value)),
           const CodiceRemoteX(),
           _buildRemoteIDTextField(),
-          const RemoteXIPhoneVicini(),
         ])),
         SliverFillRemaining(
           hasScrollBody: true,

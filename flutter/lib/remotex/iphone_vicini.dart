@@ -213,6 +213,9 @@ class DispositivoVicino {
   DispositivoVicino(this.nome, this.ip);
 }
 
+/// Ricerca degli iPhone e iPad con Remote X aperta (usata anche da «Dispositivi sulla stessa rete»).
+typedef RicercaIPhone = _Ricerca;
+
 class _Ricerca {
   RawDatagramSocket? _socket;
   Timer? _timer;

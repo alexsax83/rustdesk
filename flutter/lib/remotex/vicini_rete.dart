@@ -24,6 +24,7 @@ class _DispositiviStessaReteState extends State<DispositiviStessaRete> {
   // Su iPhone e iPad la ricerca normale può non arrivare (regole di rete di iOS):
   // in più si cercano direttamente nella rete i computer con Remote X aperta.
   final Map<String, String> _trovati = {};
+  final _iphone = RicercaIPhone();
 
   Future<void> _scansiona() async {
     final mio = await RemoteXIPhoneVicini.mioIndirizzo();
@@ -54,6 +55,8 @@ class _DispositiviStessaReteState extends State<DispositiviStessaRete> {
       _scansiona();
       _timerScan = Timer.periodic(const Duration(seconds: 12), (_) => _scansiona());
     }
+    _iphone.onCambio = () { if (mounted) setState(() {}); };
+    _iphone.avvia();
     bind.mainDiscover();
     _timer = Timer.periodic(const Duration(seconds: 4), (_) {
       bind.mainDiscover();
@@ -65,6 +68,7 @@ class _DispositiviStessaReteState extends State<DispositiviStessaRete> {
   void dispose() {
     _timer?.cancel();
     _timerScan?.cancel();
+    _iphone.ferma();
     super.dispose();
   }
 
@@ -92,8 +96,21 @@ class _DispositiviStessaReteState extends State<DispositiviStessaRete> {
             child: ListTile(
               leading: const Icon(Icons.computer),
               title: Text(e.value),
-              subtitle: Text(e.key),
+              subtitle: const Text('Computer con Remote X aperta'),
               trailing: FilledButton(onPressed: () => connect(context, e.key), child: const Text('Collegati')),
+            ),
+          ),
+        for (final d in (_iphone.trovati.values.toList()..sort((a, b) => a.nome.compareTo(b.nome))))
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.phone_iphone),
+              title: Text(d.nome),
+              subtitle: const Text('iPhone / iPad · vedi lo schermo e indichi i punti'),
+              trailing: FilledButton(
+                onPressed: () => Navigator.of(context)
+                    .push(MaterialPageRoute(builder: (_) => PaginaSchermoIPhone(dispositivo: d))),
+                child: const Text('Guarda'),
+              ),
             ),
           ),
         Expanded(child: DiscoveredPeersView()),
