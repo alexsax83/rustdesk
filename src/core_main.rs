@@ -464,6 +464,20 @@ pub fn core_main() -> Option<CoreMainAction> {
         } else if args[0] == "--get-id" {
             println!("{}", crate::ipc::get_id());
             return None;
+        } else if args[0] == "--remotex-vicini" {
+            // Remote X: dispositivi con Remote X aperta sulla stessa rete (id|nome|sistema|ip).
+            if let Ok(rt) = hbb_common::tokio::runtime::Runtime::new() {
+                let _ = rt.block_on(crate::lan::discover());
+            }
+            let mio = hbb_common::config::Config::get_id();
+            for p in hbb_common::config::LanPeers::load().peers {
+                if p.id == mio || !p.online {
+                    continue;
+                }
+                let ip = p.ip_mac.keys().next().cloned().unwrap_or_default();
+                println!("{}|{}|{}|{}", p.id, p.hostname, p.platform, ip);
+            }
+            return None;
         } else if args[0] == "--remotex-codice" {
             // Remote X: codice usa e getta (password temporanea, cambia dopo ogni collegamento).
             // Con «nuovo» ne genera subito un altro.
@@ -885,6 +899,7 @@ fn is_user_main_ipc_scope_cli_command(args: &[String]) -> bool {
             | Some("--set-unlock-pin")
             | Some("--get-id")
             | Some("--remotex-codice")
+            | Some("--remotex-vicini")
             | Some("--set-id")
             | Some("--config")
             | Some("--option")

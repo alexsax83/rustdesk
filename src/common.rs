@@ -2608,6 +2608,21 @@ pub fn get_dst_align_rgba() -> usize {
 /// Remote X: impostazioni di sicurezza fisse, non modificabili né in locale né da remoto.
 fn remotex_impostazioni_bloccate() {
     *config::APP_NAME.write().unwrap() = "RemoteX".to_owned();
+    // Su alcuni Mac recenti l'indirizzo hardware letto è tutto zero e l'ID generato
+    // diventa «0» (non valido: il server non lo registra e da fuori casa non si entra).
+    // In quel caso si sceglie un indirizzo casuale di 9 cifre, una volta sola.
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    {
+        let id = config::Config::get_id();
+        if id.len() < 6 || id.chars().all(|c| c == '0') {
+            use hbb_common::rand::Rng;
+            let nuovo = hbb_common::rand::thread_rng()
+                .gen_range(100_000_000u32..1_000_000_000u32)
+                .to_string();
+            log::info!("Remote X: ID non valido ({id}), nuovo ID {nuovo}");
+            config::Config::set_id(&nuovo);
+        }
+    }
     let mut s = config::OVERWRITE_SETTINGS.write().unwrap();
     for (k, v) in [
         ("enable-file-transfer", "N"),
