@@ -403,7 +403,10 @@ pub fn core_main() -> Option<CoreMainAction> {
             #[cfg(target_os = "macos")]
             {
                 let handler = std::thread::spawn(move || crate::start_server(true, false));
-                crate::tray::start_tray();
+                // Remote X: il motore gira dentro l'app, solo mentre è aperta, senza icona nella barra.
+                if std::env::var("REMOTEX_APP").is_err() {
+                    crate::tray::start_tray();
+                }
                 // prevent server exit when encountering errors from tray
                 hbb_common::allow_err!(handler.join());
             }
@@ -474,6 +477,14 @@ pub fn core_main() -> Option<CoreMainAction> {
                 }
                 let ip = p.ip_mac.keys().next().cloned().unwrap_or_default();
                 println!("{}|{}|{}|{}", p.id, p.hostname, p.platform, ip);
+            }
+            return None;
+        } else if args[0] == "--remotex-chiave" {
+            // Remote X: chiave personalizzata facoltativa, senza servizi di sistema né password del Mac.
+            let chiave = args.get(1).cloned().unwrap_or_default();
+            match crate::ipc::set_permanent_password(chiave) {
+                Ok(_) => println!("ok"),
+                Err(err) => println!("{err}"),
             }
             return None;
         } else if args[0] == "--remotex-codice" {
@@ -897,6 +908,7 @@ fn is_user_main_ipc_scope_cli_command(args: &[String]) -> bool {
             | Some("--set-unlock-pin")
             | Some("--get-id")
             | Some("--remotex-codice")
+            | Some("--remotex-chiave")
             | Some("--remotex-vicini")
             | Some("--set-id")
             | Some("--config")
