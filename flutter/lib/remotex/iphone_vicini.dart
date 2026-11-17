@@ -471,7 +471,7 @@ class _Sessione extends ChangeNotifier {
 class RemoteXIPhoneVicini extends StatelessWidget {
   const RemoteXIPhoneVicini({super.key});
 
-  static Future<String?> _mioIndirizzo() async {
+  static Future<String?> mioIndirizzo() async {
     // L'indirizzo del Wi‑Fi (en0), non quello della rete cellulare o di una VPN.
     try {
       String? altro;
@@ -502,25 +502,7 @@ class RemoteXIPhoneVicini extends StatelessWidget {
         onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PaginaIPhoneVicini())),
       ),
     );
-    if (!Platform.isIOS) return lista;
-    // Su iPhone e iPad: l'indirizzo con cui gli altri vedono questo schermo.
-    return Column(children: [
-      Card(
-        margin: const EdgeInsets.only(top: 8),
-        child: FutureBuilder<String?>(
-          future: _mioIndirizzo(),
-          builder: (context, s) => ListTile(
-            leading: const Icon(Icons.wifi),
-            title: const Text('Il tuo indirizzo'),
-            subtitle: Text(s.data == null
-                ? 'Collegati a una rete Wi‑Fi'
-                : '${s.data}\nChi ti aiuta sullo stesso Wi‑Fi ti trova da solo; se non ti trova, dagli questo indirizzo.'),
-            isThreeLine: s.data != null,
-          ),
-        ),
-      ),
-      lista,
-    ]);
+    return lista;
   }
 }
 

@@ -1,6 +1,7 @@
 // main window right pane
 
 import 'package:flutter_hbb/remotex/vicini_rete.dart';
+import 'package:flutter_hbb/remotex/codice.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
@@ -310,11 +311,12 @@ class _ConnectionPageState extends State<ConnectionPage>
         Expanded(
             child: Column(
           children: [
+            const CodiceRemoteX().marginOnly(top: 14, right: 12),
             Row(
               children: [
                 Flexible(child: _buildRemoteIDTextField(context)),
               ],
-            ).marginOnly(top: 22),
+            ).marginOnly(top: 8),
             SizedBox(height: 12),
             Divider().paddingOnly(right: 12),
             const Expanded(child: DispositiviStessaRete()),
